@@ -15,6 +15,16 @@ export const UNIT_COLORS: Record<string, string> = {
   moss_golem: '#3f8f3a',
   stinger: '#f2c230',
   rootwarden: '#3e9a46',
+  skimmer: '#bfeee8',
+  talonguard: '#e8e1cf',
+  thunderbird: '#57b8c9',
+  mender_kite: '#f4f0e6',
+  storm_roc: '#a08660',
+  shade: '#6a5fd0',
+  cantor: '#9be8d0',
+  revenant: '#565c8c',
+  hexer: '#d07ab8',
+  dirge: '#cfe0ff',
 };
 
 export const ATTACK_COLORS: Record<AttackType, string> = { pierce: '#f2f2f2', normal: '#ffd27a', siege: '#ff8c3a', magic: '#c98bff' };
@@ -177,6 +187,132 @@ export function drawUnitShape(c: C, id: string, x: number, y: number, r: number,
       c.fill();
       break;
     }
+    case 'skimmer': {
+      // swept-back chevron dart
+      poly(c, [[x + dir * r * 1.4, y], [x - dir * r, y - r], [x - dir * r * 0.3, y], [x - dir * r, y + r]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#1f4f55';
+      c.beginPath();
+      c.arc(x + dir * r * 0.35, y, r * 0.2, 0, Math.PI * 2);
+      c.fill();
+      break;
+    }
+    case 'talonguard': {
+      // tall bird-warrior triangle with a spear forward
+      c.strokeStyle = '#6b5a3a';
+      c.lineWidth = Math.max(1.5, r * 0.18);
+      c.beginPath();
+      c.moveTo(x - dir * r * 0.4, y + r * 0.2);
+      c.lineTo(x + dir * r * 1.6, y - r * 0.5);
+      c.stroke();
+      poly(c, [[x, y - r * 1.3], [x + r * 0.9, y + r], [x - r * 0.9, y + r]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#e0a83a';
+      poly(c, [[x + dir * r * 0.15, y - r * 0.55], [x + dir * r * 0.65, y - r * 0.4], [x + dir * r * 0.15, y - r * 0.25]]);
+      c.fill();
+      break;
+    }
+    case 'thunderbird': {
+      // gull-wing "M" with a lightning eye
+      poly(c, [[x - r * 1.5, y - r * 0.2], [x - r * 0.7, y - r * 0.9], [x, y - r * 0.1], [x + r * 0.7, y - r * 0.9], [x + r * 1.5, y - r * 0.2], [x + r * 0.5, y + r * 0.6], [x, y + r * 0.3], [x - r * 0.5, y + r * 0.6]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#ffe066';
+      c.beginPath();
+      c.arc(x + dir * r * 0.2, y - r * 0.05, r * 0.2, 0, Math.PI * 2);
+      c.fill();
+      break;
+    }
+    case 'mender_kite': {
+      // kite diamond with a green cross and a tail
+      c.strokeStyle = '#7dff8a';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(x, y + r * 1.2);
+      c.quadraticCurveTo(x - dir * r * 0.6, y + r * 1.8, x - dir * r * 0.1, y + r * 2.3);
+      c.stroke();
+      poly(c, [[x, y - r * 1.3], [x + r * 0.9, y - r * 0.1], [x, y + r * 1.2], [x - r * 0.9, y - r * 0.1]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#2fbf4a';
+      c.fillRect(x - r * 0.12, y - r * 0.6, r * 0.24, r * 0.9);
+      c.fillRect(x - r * 0.45, y - r * 0.27, r * 0.9, r * 0.24);
+      break;
+    }
+    case 'storm_roc': {
+      // big raptor: broad swept wings, hooked head
+      poly(c, [[x + dir * r * 1.3, y - r * 0.1], [x + dir * r * 0.3, y - r * 0.35], [x - dir * r * 0.2, y - r * 1.1], [x - dir * r * 1.5, y - r * 0.9], [x - dir * r * 0.6, y - r * 0.1], [x - dir * r * 1.3, y + r * 0.5], [x + dir * r * 0.2, y + r * 0.4]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#e0a83a';
+      poly(c, [[x + dir * r * 1.3, y - r * 0.1], [x + dir * r * 1.7, y + r * 0.1], [x + dir * r * 1.2, y + r * 0.15]]);
+      c.fill();
+      break;
+    }
+    case 'shade':
+    case 'dirge': {
+      // ghost: dome top, wavy hem; the Dirge gets a wailing mouth
+      const big = id === 'dirge';
+      c.beginPath();
+      c.moveTo(x - r, y + r);
+      c.lineTo(x - r, y - r * 0.1);
+      c.arc(x, y - r * 0.1, r, Math.PI, 0);
+      c.lineTo(x + r, y + r);
+      const waves = big ? 4 : 3;
+      for (let i = 0; i < waves; i++) {
+        const x1 = x + r - ((i + 0.5) * 2 * r) / waves;
+        const x2 = x + r - ((i + 1) * 2 * r) / waves;
+        c.quadraticCurveTo(x1, y + r * (i % 2 ? 1.35 : 0.65), x2, y + r);
+      }
+      c.closePath();
+      body(c, fill, stroke, lw);
+      c.fillStyle = big ? '#2a2560' : '#cfe0ff';
+      c.beginPath();
+      c.arc(x + dir * r * 0.15 - r * 0.32, y - r * 0.2, r * 0.15, 0, Math.PI * 2);
+      c.arc(x + dir * r * 0.15 + r * 0.32, y - r * 0.2, r * 0.15, 0, Math.PI * 2);
+      c.fill();
+      if (big) {
+        c.beginPath();
+        c.ellipse(x + dir * r * 0.15, y + r * 0.3, r * 0.2, r * 0.32, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+      break;
+    }
+    case 'cantor': {
+      // robed singer: round head on a bell-shaped robe, open "O" mouth
+      poly(c, [[x - r * 0.45, y - r * 0.1], [x + r * 0.45, y - r * 0.1], [x + r, y + r * 1.1], [x - r, y + r * 1.1]]);
+      body(c, fill, stroke, lw);
+      c.beginPath();
+      c.arc(x, y - r * 0.55, r * 0.6, 0, Math.PI * 2);
+      body(c, '#efe3c8', stroke, lw * 0.7);
+      c.strokeStyle = '#2a2560';
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.arc(x + dir * r * 0.2, y - r * 0.45, r * 0.18, 0, Math.PI * 2);
+      c.stroke();
+      break;
+    }
+    case 'revenant': {
+      // heater shield with a visor slit
+      poly(c, [[x - r, y - r], [x + r, y - r], [x + r, y + r * 0.1], [x, y + r * 1.25], [x - r, y + r * 0.1]]);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#a8ffe0';
+      c.fillRect(x - r * 0.6, y - r * 0.45, r * 1.2, r * 0.2);
+      break;
+    }
+    case 'hexer': {
+      // hexagon mask with one eye
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 6; i++) pts.push([x + Math.cos((Math.PI / 3) * i + Math.PI / 6) * r * 1.15, y + Math.sin((Math.PI / 3) * i + Math.PI / 6) * r * 1.15]);
+      poly(c, pts);
+      body(c, fill, stroke, lw);
+      c.fillStyle = '#2a2560';
+      c.beginPath();
+      c.ellipse(x + dir * r * 0.15, y, r * 0.45, r * 0.25, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffe066';
+      c.beginPath();
+      c.arc(x + dir * r * 0.2, y, r * 0.13, 0, Math.PI * 2);
+      c.fill();
+      break;
+    }
     default: {
       c.beginPath();
       c.arc(x, y, r, 0, Math.PI * 2);
@@ -189,6 +325,12 @@ export function drawUnitShape(c: C, id: string, x: number, y: number, r: number,
 export function drawBuildingIcon(c: C, def: BuildingDef, x: number, y: number, s: number, factionColor: string, dir = 1) {
   if (def.spawn) {
     const u = def.spawn.unit;
+    if (def.spawn.count && def.spawn.count > 2) {
+      drawUnitShape(c, u.id, x - s * 0.2, y + s * 0.1, s * 0.18, '#111', 1.2, dir);
+      drawUnitShape(c, u.id, x + s * 0.2, y + s * 0.1, s * 0.18, '#111', 1.2, dir);
+      drawUnitShape(c, u.id, x, y - s * 0.15, s * 0.18, '#111', 1.2, dir);
+      return;
+    }
     const r = s * (u.size >= 13 ? 0.3 : 0.26);
     if (def.spawn.count && def.spawn.count > 1) {
       drawUnitShape(c, u.id, x - s * 0.17, y + s * 0.08, r * 0.8, '#111', 1.2, dir);

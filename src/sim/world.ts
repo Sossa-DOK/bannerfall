@@ -15,6 +15,11 @@ export const BLOOM_TIME = 95;
 export const OVERCLOCK_TIME = 20;
 export const OVERCLOCK_COOLDOWN = 45;
 export const CORE_HP = 10000;
+export const GALE_COOLDOWN = 60;
+const GALE_PUSH = 80;
+export const ECHO_CHANCE = 0.25;
+const ECHO_HP = 0.4;
+const ECHO_LIFE = 15;
 /** Buildings are sturdy so one lost fight doesn't wipe a whole grid. */
 export const BUILDING_HP_MULT = 2;
 const AGGRO = 150;
@@ -52,6 +57,13 @@ export interface Unit extends Entity {
   rootT: number;
   lastHurt: number;
   abilityT: number;
+  stunT: number;
+  curseT: number;
+  curseMult: number;
+  attacks: number;
+  /** Choir Echo: temporary ghost copy */
+  echo: boolean;
+  life: number;
 }
 
 export interface Building extends Entity {
@@ -69,6 +81,7 @@ export interface Building extends Entity {
   age: number;
   target: Entity | null;
   ramp: number;
+  silenceT: number;
 }
 
 export interface Core extends Entity {
@@ -88,6 +101,8 @@ export interface PlayerState {
   name: string;
   kills: number;
   built: number;
+  /** faction active ability (Gale) cooldown */
+  abilityCd: number;
 }
 
 export interface PlayerConfig {
@@ -110,7 +125,12 @@ export type SimEvent =
   | { type: 'death'; x: number; y: number; team: number; big: boolean }
   | { type: 'bounty'; x: number; y: number; amount: number; owner: number }
   | { type: 'root'; x: number; y: number; r: number }
-  | { type: 'rank'; x: number; y: number; owner: number; bloom: boolean };
+  | { type: 'rank'; x: number; y: number; owner: number; bloom: boolean }
+  | { type: 'gale'; team: number }
+  | { type: 'heal'; x: number; y: number }
+  | { type: 'silence'; x: number; y: number; r: number }
+  | { type: 'echo'; x: number; y: number }
+  | { type: 'stun'; x: number; y: number };
 
 interface AttackOpts {
   splash?: number;
@@ -118,6 +138,10 @@ interface AttackOpts {
   hitsAir: boolean;
   hitsGround: boolean;
   slow?: { pct: number; dur: number };
+  curse?: { mult: number; dur: number };
+  knockback?: number;
+  /** heal this core by fraction of damage dealt */
+  coreHeal?: { core: Core; frac: number };
 }
 
 export class World {
@@ -133,12 +157,20 @@ export class World {
   private nextId = 1;
   private teamCap = [0, 0];
   private incomeT = 0;
+  private pendingEchoes: Unit[] = [];
+  /** events raised by commands between steps (e.g. Gale, manual upgrade) */
+  private cmdEvents: SimEvent[] = [];
+  private inStep = false;
+
+  private emit(e: SimEvent) {
+    (this.inStep ? this.events : this.cmdEvents).push(e);
+  }
 
   constructor(cfg: MatchConfig) {
     this.rng = new Rng(cfg.seed);
     this.players = cfg.players.map((p, i) => ({
       id: i, team: p.team, slot: p.slot, faction: p.faction, gold: START_GOLD, isHuman: p.isHuman,
-      incomeMult: p.incomeMult ?? 1, name: p.name, kills: 0, built: 0,
+      incomeMult: p.incomeMult ?? 1, name: p.name, kills: 0, built: 0, abilityCd: 20,
     }));
     this.cores = [0, 1].map((team) => ({
       id: this.nextId++, kind: 'core' as const, team, x: L.CORE_X[team], y: L.LANE_Y,
@@ -176,6 +208,7 @@ export class World {
       if (b.owner !== pid || b.def.kind !== 'econ') continue;
       let v = (b.def.income ?? 0) * rankMult(b.rank);
       if (b.def.incomeGrowth) v += Math.min(Math.floor(b.age / 60) * b.def.incomeGrowth.perMin, b.def.incomeGrowth.max);
+      if (b.def.incomeCalm && !this.units.some((u) => u.team !== b.team && dist(u, b) <= b.def.incomeCalm!.radius)) v += b.def.incomeCalm.bonus;
       if (b.ocT > 0) v *= 2;
       inc += v;
     }
@@ -218,7 +251,29 @@ export class World {
     return b.owner === pid && b.alive && FACTIONS[p.faction].mechanic === 'overclock' && b.def.kind !== 'tower' && b.ocCd <= 0;
   }
 
+  canGale(pid: number) {
+    const p = this.players[pid];
+    return FACTIONS[p.faction].mechanic === 'gale' && p.abilityCd <= 0 && this.winner === null;
+  }
+
   // ---------------- commands ----------------
+
+  /** Aerie: push every enemy ground unit back toward its own side and slow it. */
+  gale(pid: number): boolean {
+    if (!this.canGale(pid)) return false;
+    const p = this.players[pid];
+    p.abilityCd = GALE_COOLDOWN;
+    const dir = p.team === 0 ? 1 : -1; // push direction (away from caster)
+    for (const u of this.units) {
+      if (u.team === p.team || u.flying || !u.alive) continue;
+      u.x = Math.max(L.CORE_X[0], Math.min(L.CORE_X[1], u.x + dir * GALE_PUSH));
+      u.slowT = 2;
+      u.slowPct = 0.4;
+      u.target = null;
+    }
+    this.emit({ type: 'gale', team: p.team });
+    return true;
+  }
 
   place(pid: number, defId: string, col: number, row: number): boolean {
     if (!this.canPlace(pid, defId, col, row).ok) return false;
@@ -230,7 +285,7 @@ export class World {
     this.buildings.push({
       id: this.nextId++, kind: 'building', team: p.team, owner: pid, def, col, row, x: c.x, y: c.y,
       hp: def.hp * BUILDING_HP_MULT, maxHp: def.hp * BUILDING_HP_MULT, radius: L.BUILDING_R, armor: 'fortified', flying: false, alive: true,
-      rank: 1, spawnT: def.spawn ? def.spawn.interval * 0.5 : 0, cd: 0, bloomT: 0, ocT: 0, ocCd: 0, age: 0, target: null, ramp: 0,
+      rank: 1, spawnT: def.spawn ? def.spawn.interval * 0.5 : 0, cd: 0, bloomT: 0, ocT: 0, ocCd: 0, age: 0, target: null, ramp: 0, silenceT: 0,
     });
     return true;
   }
@@ -258,7 +313,7 @@ export class World {
     b.bloomT = 0;
     b.maxHp = b.def.hp * BUILDING_HP_MULT * rankMult(b.rank);
     b.hp += b.maxHp - old;
-    this.events.push({ type: 'rank', x: b.x, y: b.y, owner: b.owner, bloom });
+    this.emit({ type: 'rank', x: b.x, y: b.y, owner: b.owner, bloom });
   }
 
   // ---------------- simulation ----------------
@@ -266,7 +321,9 @@ export class World {
   step() {
     if (this.winner !== null) return;
     const dt = TICK;
-    this.events = [];
+    this.events = this.cmdEvents;
+    this.cmdEvents = [];
+    this.inStep = true;
     this.time += dt;
     this.tick++;
 
@@ -275,6 +332,7 @@ export class World {
       this.incomeT -= INCOME_INTERVAL;
       for (const p of this.players) p.gold += this.income(p.id);
     }
+    for (const p of this.players) if (p.abilityCd > 0) p.abilityCd -= dt;
 
     const teamCount = [0, 0];
     this.teamCap = [0, 1].map((t) => UNIT_CAP_PER_PLAYER * this.players.filter((p) => p.team === t).length);
@@ -286,13 +344,19 @@ export class World {
     this.separate();
 
     this.units = this.units.filter((u) => u.alive);
+    if (this.pendingEchoes.length) {
+      for (const e of this.pendingEchoes) this.units.push(e);
+      this.pendingEchoes = [];
+    }
     this.buildings = this.buildings.filter((b) => b.alive);
     for (const c of this.cores) if (c.hp <= 0 && this.winner === null) this.winner = 1 - c.team;
+    this.inStep = false;
   }
 
   private updateBuilding(b: Building, dt: number, teamCount: number[]) {
     if (!b.alive) return;
     b.age += dt;
+    if (b.silenceT > 0) b.silenceT -= dt;
     if (b.ocT > 0) b.ocT -= dt;
     if (b.ocCd > 0) b.ocCd -= dt;
     const fac = FACTIONS[this.players[b.owner].faction];
@@ -323,7 +387,8 @@ export class World {
       x: b.x + this.rng.range(-8, 8), y: b.y + this.rng.range(-8, 8),
       hp, maxHp: hp, radius: def.size, armor: def.armor, flying: !!def.flying, alive: true,
       mult: m, cd: 0, target: null, retarget: 0, slowT: 0, slowPct: 0, rootT: 0, lastHurt: -99,
-      abilityT: def.root ? def.root.every * 0.5 : 0,
+      abilityT: (def.root?.every ?? def.silence?.every ?? 0) * 0.5,
+      stunT: 0, curseT: 0, curseMult: 1, attacks: 0, echo: false, life: 0,
     });
   }
 
@@ -331,6 +396,15 @@ export class World {
     if (!t.alive) return;
     t.cd -= dt;
     if (t.cd > 0) return;
+    if (t.kind === 'building' && t.silenceT > 0) return;
+    if (tw.pulse) {
+      const hit = [...this.enemies(team)].filter((e) => this.eligible(e, tw.hitsAir, true) && this.inRange(t, e, tw.range, 0));
+      if (!hit.length) return;
+      t.cd = tw.cooldown;
+      this.emit({ type: 'splash', x: t.x, y: t.y, r: tw.range });
+      for (const e of hit) this.hurt(e, tw.dmg * mult, tw.attack, owner);
+      return;
+    }
     const prev = t.target;
     const keep = prev && prev.alive && this.inRange(t, prev, tw.range, tw.minRange ?? 0);
     const target = keep ? prev : this.findTarget(team, t.x, t.y, tw.range, tw.hitsAir, true, tw.minRange ?? 0, false);
@@ -346,15 +420,29 @@ export class World {
     t.target = target;
     t.cd = tw.cooldown;
     this.attack(team, owner, t.x, t.y, target, dmg, tw.attack, {
-      splash: tw.splash, hitsAir: tw.hitsAir, hitsGround: true, slow: tw.slow,
+      splash: tw.splash, chain: tw.chain, hitsAir: tw.hitsAir, hitsGround: true, slow: tw.slow, knockback: tw.knockback,
+      coreHeal: tw.coreHeal ? { core: this.cores[team], frac: tw.coreHeal } : undefined,
     });
   }
 
   private updateUnit(u: Unit, dt: number) {
     const d = u.def;
+    if (u.echo) {
+      u.life -= dt;
+      if (u.life <= 0) {
+        u.alive = false;
+        this.emit({ type: 'death', x: u.x, y: u.y, team: u.team, big: false });
+        return;
+      }
+    }
     u.cd -= dt;
     if (u.slowT > 0) u.slowT -= dt;
     if (u.rootT > 0) u.rootT -= dt;
+    if (u.curseT > 0) u.curseT -= dt;
+    if (u.stunT > 0) {
+      u.stunT -= dt;
+      return;
+    }
     if (d.regen && this.time - u.lastHurt > 3) u.hp = Math.min(u.maxHp, u.hp + d.regen * u.mult * dt);
 
     if (d.root) {
@@ -364,9 +452,28 @@ export class World {
         if (victims.length > 0) {
           for (const v of victims) v.rootT = d.root.duration;
           u.abilityT = d.root.every;
-          this.events.push({ type: 'root', x: u.x, y: u.y, r: d.root.radius });
+          this.emit({ type: 'root', x: u.x, y: u.y, r: d.root.radius });
         }
       }
+    }
+
+    if (d.silence) {
+      u.abilityT -= dt;
+      if (u.abilityT <= 0) {
+        const r = d.silence.radius;
+        const near = this.buildings.filter((b) => b.alive && b.team !== u.team && dist(u, b) <= r);
+        if (near.some((b) => b.def.tower)) {
+          for (const b of near) b.silenceT = d.silence.duration;
+          u.abilityT = d.silence.every;
+          this.emit({ type: 'silence', x: u.x, y: u.y, r });
+        }
+      }
+    }
+    if (d.stun) u.abilityT -= dt;
+
+    if (d.heal) {
+      this.updateHealer(u, dt);
+      return;
     }
 
     u.retarget -= dt;
@@ -383,9 +490,17 @@ export class World {
       if (gap <= d.range) {
         if (u.cd <= 0) {
           u.cd = d.cooldown;
-          this.attack(u.team, u.owner, u.x, u.y, t, d.dmg * u.mult, d.attack, {
+          const dmg = d.dmg * u.mult * (d.dive && u.attacks === 0 ? 2 : 1);
+          u.attacks++;
+          this.attack(u.team, u.owner, u.x, u.y, t, dmg, d.attack, {
             splash: d.splash, chain: d.chain, hitsAir: !!d.hitsAir, hitsGround: d.hitsGround ?? true,
+            slow: d.slowOnHit, curse: d.curse,
           });
+          if (d.stun && u.abilityT <= 0 && t.kind === 'unit' && !t.flying && t.alive) {
+            (t as Unit).stunT = d.stun.duration;
+            u.abilityT = d.stun.every;
+            this.emit({ type: 'stun', x: t.x, y: t.y });
+          }
         }
       } else {
         moveToward(u, t.x, t.y, Math.min(step, gap - d.range + 0.5));
@@ -402,6 +517,42 @@ export class World {
     } else {
       moveToward(u, core.x, u.flying ? core.y : u.y + (L.LANE_Y - u.y) * 0.03, step);
     }
+  }
+
+  /** Support unit: heal the most-hurt ally nearby, otherwise tag along behind the army. */
+  private updateHealer(u: Unit, dt: number) {
+    const d = u.def;
+    const step = d.speed * (u.slowT > 0 ? 1 - u.slowPct : 1) * (u.rootT > 0 ? 0 : 1) * dt;
+    let best: Unit | null = null;
+    let bf = 0.999;
+    for (const a of this.units) {
+      if (a === u || !a.alive || a.team !== u.team || a.def.heal) continue;
+      const f = a.hp / a.maxHp;
+      if (f < bf && dist(u, a) <= 220) {
+        bf = f;
+        best = a;
+      }
+    }
+    if (best) {
+      const gap = dist(u, best) - best.radius - u.radius;
+      if (gap <= d.range) {
+        if (u.cd <= 0) {
+          u.cd = d.cooldown;
+          best.hp = Math.min(best.maxHp, best.hp + (d.heal ?? 0) * u.mult);
+          this.emit({ type: 'heal', x: best.x, y: best.y });
+        }
+      } else moveToward(u, best.x, best.y, step);
+      return;
+    }
+    // follow the friendly unit furthest toward the enemy, staying a little behind it
+    const dir = u.team === 0 ? 1 : -1;
+    let lead: Unit | null = null;
+    for (const a of this.units) if (a !== u && a.alive && a.team === u.team && !a.def.heal && (!lead || a.x * dir > lead.x * dir)) lead = a;
+    if (lead) {
+      const tx = lead.x - dir * 40;
+      if (Math.hypot(tx - u.x, lead.y - u.y) > 10) moveToward(u, tx, lead.y, step);
+    }
+    void dt;
   }
 
   private separate() {
@@ -466,18 +617,30 @@ export class World {
   }
 
   private attack(team: number, owner: number, x: number, y: number, target: Entity, dmg: number, attack: AttackType, o: AttackOpts) {
-    this.events.push({ type: 'shot', x1: x, y1: y, x2: target.x, y2: target.y, attack });
-    this.hurt(target, dmg, attack, owner);
-    if (o.slow && target.kind === 'unit') {
+    this.emit({ type: 'shot', x1: x, y1: y, x2: target.x, y2: target.y, attack });
+    const dealt = this.hurt(target, dmg, attack, owner);
+    if (o.coreHeal && dealt > 0) {
+      const c = o.coreHeal.core;
+      if (c.alive) c.hp = Math.min(c.maxHp, c.hp + dealt * o.coreHeal.frac);
+    }
+    if (target.kind === 'unit' && target.alive) {
       const u = target as Unit;
-      u.slowT = o.slow.dur;
-      u.slowPct = o.slow.pct;
+      if (o.slow) {
+        u.slowT = o.slow.dur;
+        u.slowPct = o.slow.pct;
+      }
+      if (o.curse) {
+        u.curseT = o.curse.dur;
+        u.curseMult = o.curse.mult;
+      }
+      if (o.knockback && !u.flying) u.x += (u.team === 0 ? -1 : 1) * o.knockback;
     }
     if (o.splash) {
-      this.events.push({ type: 'splash', x: target.x, y: target.y, r: o.splash });
+      this.emit({ type: 'splash', x: target.x, y: target.y, r: o.splash });
       for (const e of this.enemies(team)) {
         if (e === target || !this.eligible(e, o.hitsAir, o.hitsGround)) continue;
-        if (dist(e, target) - e.radius <= o.splash) this.hurt(e, dmg * 0.6, attack, owner);
+        // flyers are spread out: splash only does half to them
+        if (dist(e, target) - e.radius <= o.splash) this.hurt(e, dmg * 0.6 * (e.flying ? 0.5 : 1), attack, owner);
       }
     }
     if (o.chain && o.chain > 1) {
@@ -495,7 +658,7 @@ export class World {
           }
         }
         if (!next) break;
-        this.events.push({ type: 'shot', x1: last.x, y1: last.y, x2: next.x, y2: next.y, attack });
+        this.emit({ type: 'shot', x1: last.x, y1: last.y, x2: next.x, y2: next.y, attack });
         this.hurt(next, dmg * 0.7, attack, owner);
         hit.add(next);
         last = next;
@@ -503,31 +666,60 @@ export class World {
     }
   }
 
-  private hurt(e: Entity, base: number, attack: AttackType, owner: number) {
-    if (!e.alive) return;
-    e.hp -= base * DAMAGE[attack][e.armor] * this.overtimeMult();
-    if (e.kind === 'unit') (e as Unit).lastHurt = this.time;
-    if (e.hp > 0) return;
+  /** Returns damage actually dealt. */
+  private hurt(e: Entity, base: number, attack: AttackType, owner: number): number {
+    if (!e.alive) return 0;
+    let amt = base * DAMAGE[attack][e.armor] * this.overtimeMult();
+    if (e.kind === 'unit') {
+      const u = e as Unit;
+      if (u.curseT > 0) amt *= u.curseMult;
+      u.lastHurt = this.time;
+    }
+    const dealt = Math.min(amt, e.hp);
+    e.hp -= amt;
+    if (e.hp > 0) return dealt;
     e.alive = false;
     if (e.kind === 'core') {
-      this.events.push({ type: 'death', x: e.x, y: e.y, team: e.team, big: true });
-      return;
+      this.emit({ type: 'death', x: e.x, y: e.y, team: e.team, big: true });
+      return dealt;
+    }
+    this.emit({ type: 'death', x: e.x, y: e.y, team: e.team, big: e.kind === 'building' || e.radius >= 13 });
+    if (e.kind === 'unit') {
+      const u = e as Unit;
+      this.onUnitDeath(u);
+      if (u.echo) return dealt; // Echoes give no bounty
     }
     const bounty = e.kind === 'unit' ? (e as Unit).def.bounty : Math.floor((e as Building).def.cost * 0.1);
-    this.events.push({ type: 'death', x: e.x, y: e.y, team: e.team, big: e.kind === 'building' || e.radius >= 13 });
     const killerTeam = 1 - e.team;
     if (owner >= 0) {
       this.players[owner].gold += bounty;
       this.players[owner].kills++;
-      this.events.push({ type: 'bounty', x: e.x, y: e.y, amount: bounty, owner });
+      this.emit({ type: 'bounty', x: e.x, y: e.y, amount: bounty, owner });
     } else {
       const team = this.players.filter((p) => p.team === killerTeam);
       const share = Math.floor(bounty / team.length);
       for (const p of team) {
         p.gold += share;
-        this.events.push({ type: 'bounty', x: e.x, y: e.y, amount: share, owner: p.id });
+        this.emit({ type: 'bounty', x: e.x, y: e.y, amount: share, owner: p.id });
       }
     }
+    return dealt;
+  }
+
+  private onUnitDeath(u: Unit) {
+    // Soul Font: enemy deaths nearby pay out
+    for (const b of this.buildings) {
+      if (!b.alive || b.team === u.team || !b.def.soulFont || u.echo) continue;
+      if (dist(b, u) <= b.def.soulFont.radius) this.players[b.owner].gold += b.def.soulFont.gold;
+    }
+    // Choir Echo
+    if (u.echo || FACTIONS[this.players[u.owner].faction].mechanic !== 'echo') return;
+    if (!u.def.alwaysEcho && this.rng.next() >= ECHO_CHANCE) return;
+    this.pendingEchoes.push({
+      ...u, id: this.nextId++, alive: true, hp: u.maxHp * ECHO_HP, echo: true, life: ECHO_LIFE,
+      target: null, retarget: 0, cd: 0.5, slowT: 0, rootT: 0, stunT: 0, curseT: 0, attacks: 1,
+    });
+    this.emit({ type: 'echo', x: u.x, y: u.y });
   }
 }
 

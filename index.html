@@ -27,7 +27,7 @@
       <div id="bottombar" class="hud">
         <div id="build-col">
           <div id="build-buttons"></div>
-          <div id="mechanic" class="muted"></div>
+          <div class="mech-row"><button id="ability-btn" class="hidden"></button><div id="mechanic" class="muted"></div></div>
         </div>
         <div id="sel-panel" class="empty">
           <div id="sel-title"></div>
@@ -47,10 +47,12 @@
           <div class="choices" data-group="faction">
             <button data-value="union" class="fac union"><b>Brasswright Union</b><span>Tough, expensive, strong late. Overclock barracks.</span></button>
             <button data-value="bloomkin" class="fac bloomkin"><b>Bloomkin Grove</b><span>Cheap swarms. Buildings Bloom (self-upgrade) over time.</span></button>
+            <button data-value="aerie" class="fac aerie"><b>Galewing Aerie</b><span>Fast, fragile flyers. Gale blows enemies back.</span></button>
+            <button data-value="choir" class="fac choir"><b>Hollow Choir</b><span>Arcane spirits. The fallen rise again as Echoes.</span></button>
           </div>
           <h3>Enemy faction</h3>
           <div class="choices small" data-group="enemy">
-            <button data-value="other">Opposite</button><button data-value="union">Union</button><button data-value="bloomkin">Bloomkin</button>
+            <button data-value="random">Random</button><button data-value="union">Union</button><button data-value="bloomkin">Bloomkin</button><button data-value="aerie">Aerie</button><button data-value="choir">Choir</button>
           </div>
           <h3>Mode</h3>
           <div class="choices small" data-group="mode">
@@ -65,7 +67,7 @@
           <button id="tutorial-btn">🎓 Tutorial</button>
           <p class="help muted">
             Build barracks on your grid: they spawn units that march down the bridge on their own. Towers defend your side.
-            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
+            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>G</b> gale · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
           </p>
         </div>
       </div>

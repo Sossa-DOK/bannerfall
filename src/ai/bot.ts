@@ -49,6 +49,8 @@ export class Bot {
       }
     }
 
+    if (fac.mechanic === 'gale' && w.canGale(p.id) && this.threatLevel() >= 6) w.gale(p.id);
+
     if (!this.plan) this.plan = this.choose(mine);
     const plan = this.plan;
     if (!plan) return;
@@ -129,7 +131,9 @@ export class Bot {
         for (const [a, n] of Object.entries(armor.mix) as [ArmorType, number][]) counter += (DAMAGE[atk][a] * n) / armor.total;
       }
       const same = mine.filter((b) => b.def.id === d.id).length;
-      const score = counter * 1.5 + d.tier * 0.35 - same * 0.18 + w.rng.next() * NOISE[this.difficulty] * 2;
+      // healers are support: only worth it once there's an army to heal
+      const support = d.spawn!.unit.heal ? (barracks < 3 ? -3 : -0.4 - same * 0.5) : 0;
+      const score = support + counter * 1.5 + d.tier * 0.35 - same * 0.18 + w.rng.next() * NOISE[this.difficulty] * 2;
       if (score > bestScore) {
         bestScore = score;
         pick = d;

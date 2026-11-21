@@ -2,7 +2,7 @@ import './style.css';
 import type { Difficulty } from './ai/bot';
 import type { BuildingDef, FactionId } from './data/types';
 import { FACTIONS } from './data/factions';
-import { Match, type MatchSetup, type Mode } from './game/match';
+import { Match, otherFaction, type MatchSetup, type Mode } from './game/match';
 import { platform } from './platform/sdk';
 import { Renderer } from './render/renderer';
 import * as L from './sim/layout';
@@ -17,7 +17,7 @@ const canvas = $<HTMLCanvasElement>('#game');
 const renderer = new Renderer(canvas);
 
 // ---------- menu state ----------
-const choice = { faction: 'union' as FactionId, enemy: 'other', mode: '1v1' as Mode, difficulty: 'normal' as Difficulty };
+const choice = { faction: 'union' as FactionId, enemy: 'random', mode: '1v1' as Mode, difficulty: 'normal' as Difficulty };
 document.querySelectorAll<HTMLElement>('.choices').forEach((group) => {
   const key = group.dataset.group as keyof typeof choice;
   const sync = () => group.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('sel', b.dataset.value === choice[key]));
@@ -60,8 +60,10 @@ function toggleLegend() {
   if (match && match.world.winner === null) {
     pausedBeforeLegend = paused;
     setPaused(true);
-    legend.show(match.world.players[match.humanId].faction);
-  } else legend.show(choice.faction);
+    const w = match.world;
+    const me = w.players[match.humanId];
+    legend.show(me.faction, w.players.find((p) => p.team !== me.team)?.faction);
+  } else legend.show(choice.faction, choice.enemy === 'random' ? undefined : (choice.enemy as FactionId));
 }
 
 const hud = new Hud(stage, {
@@ -71,6 +73,7 @@ const hud = new Hud(stage, {
   },
   upgrade: () => doUpgrade(),
   overclock: () => doOverclock(),
+  ability: () => doAbility(),
   setSpeed: (n) => (speed = n),
   togglePause: () => setPaused(!paused),
 });
@@ -86,11 +89,12 @@ function startMatch(asTutorial = false) {
   tutorial?.finish();
   tutorial = null;
   legendOpened = false;
-  const enemy: FactionId = choice.enemy === 'other' ? (choice.faction === 'union' ? 'bloomkin' : 'union') : (choice.enemy as FactionId);
+  const seed = (Date.now() ^ (matchCount * 2654435761)) >>> 0;
+  const enemy: FactionId = choice.enemy === 'random' ? otherFaction(choice.faction, seed >>> 5) : (choice.enemy as FactionId);
   const setup: MatchSetup = {
     mode: asTutorial ? '1v1' : choice.mode, playerFaction: choice.faction, enemyFaction: asTutorial ? (choice.faction === 'union' ? 'bloomkin' : 'union') : enemy,
     difficulty: asTutorial ? 'easy' : choice.difficulty,
-    seed: (Date.now() ^ (matchCount * 2654435761)) >>> 0, human: true,
+    seed, human: true,
   };
   matchCount++;
   currentIsTutorial = asTutorial;
@@ -131,6 +135,14 @@ function setPaused(p: boolean) {
 function doUpgrade() {
   if (!match || !selected) return;
   if (!match.world.upgrade(match.humanId, selected.id)) toast(selected.rank >= 3 ? 'Already max rank' : 'Not enough gold');
+}
+
+function doAbility() {
+  if (!match || paused) return;
+  if (!match.world.gale(match.humanId)) {
+    const p = match.world.players[match.humanId];
+    if (FACTIONS[p.faction].mechanic === 'gale') toast(`Gale recharging (${Math.ceil(p.abilityCd)}s)`);
+  }
 }
 
 function doOverclock() {
@@ -255,6 +267,7 @@ window.addEventListener('keydown', (e) => {
     } else setPaused(true);
   } else if (e.key === 'u' || e.key === 'U') doUpgrade();
   else if (e.key === 'o' || e.key === 'O') doOverclock();
+  else if (e.key === 'g' || e.key === 'G') doAbility();
 });
 
 // Don't fast-forward after the tab was hidden. (No gameplayStop on focus loss, per CrazyGames rules.)

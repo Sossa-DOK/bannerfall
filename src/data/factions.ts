@@ -108,7 +108,116 @@ const bloomkin: FactionDef = {
   ],
 };
 
-export const FACTIONS: Record<FactionId, FactionDef> = { union, bloomkin };
+// ---------- Galewing Aerie ----------
+const aerie: FactionDef = {
+  id: 'aerie',
+  name: 'Galewing Aerie',
+  tagline: 'Fast, fragile, mostly airborne.',
+  color: '#7fd3c8',
+  dark: '#1f4f55',
+  shape: 'diamond',
+  mechanic: 'gale',
+  mechanicText: 'Gale: press G (or the Gale button) to blow every enemy ground unit back and slow it. 60 s cooldown.',
+  buildings: [
+    {
+      id: 'perch_roost', name: 'Perch Roost', short: 'PR', tier: 1, kind: 'barracks', cost: 65, hp: 340,
+      desc: 'Spawns 2 Skimmers: fast flying darts. Hit air.',
+      spawn: { interval: 8, count: 2, unit: { id: 'skimmer', name: 'Skimmer', hp: 62, dmg: 8, cooldown: 0.8, range: 95, speed: 70, attack: 'pierce', armor: 'light', bounty: 4, size: 6, flying: true, hitsAir: true } },
+    },
+    {
+      id: 'talon_lodge', name: 'Talon Lodge', short: 'TL', tier: 1, kind: 'barracks', cost: 60, hp: 400,
+      desc: 'Spawns Talonguard: ground spear-fighters. Their first strike (Dive) deals double damage.',
+      spawn: { interval: 9, unit: { id: 'talonguard', name: 'Talonguard', hp: 200, dmg: 14, cooldown: 1.0, range: 8, speed: 42, attack: 'normal', armor: 'heavy', bounty: 6, size: 9, dive: true } },
+    },
+    {
+      id: 'wind_spire', name: 'Wind Spire', short: 'WS', tier: 1, kind: 'tower', cost: 75, hp: 480,
+      desc: 'Tower. Fast gusts that knock enemies back. Hits air.',
+      tower: { dmg: 9, cooldown: 0.5, range: 165, attack: 'pierce', hitsAir: true, knockback: 8 },
+    },
+    {
+      id: 'thunder_eyrie', name: 'Thunder Eyrie', short: 'TE', tier: 2, kind: 'barracks', cost: 140, hp: 560,
+      desc: 'Spawns Thunderbirds: flying storm-callers with splash lightning. Hit air.',
+      spawn: { interval: 16, unit: { id: 'thunderbird', name: 'Thunderbird', hp: 450, dmg: 24, cooldown: 1.5, range: 95, speed: 36, attack: 'magic', armor: 'heavy', bounty: 14, size: 12, flying: true, hitsAir: true, splash: 30 } },
+    },
+    {
+      id: 'kite_shrine', name: 'Kite Shrine', short: 'KS', tier: 2, kind: 'barracks', cost: 120, hp: 420,
+      desc: 'Spawns Mender Kites: flying healers. No attack — they heal the most-hurt ally nearby.',
+      spawn: { interval: 15, unit: { id: 'mender_kite', name: 'Mender Kite', hp: 95, dmg: 0, cooldown: 1.0, range: 70, speed: 50, attack: 'normal', armor: 'light', bounty: 8, size: 8, flying: true, heal: 20 } },
+    },
+    {
+      id: 'updraft_mill', name: 'Updraft Mill', short: 'UM', tier: 2, kind: 'econ', cost: 110, hp: 420,
+      desc: 'Economy: +5 gold per tick, +3 more while no enemy unit is within 200 px (calm skies).',
+      income: 5, incomeCalm: { bonus: 3, radius: 200 },
+    },
+    {
+      id: 'roc_nest', name: 'Roc Nest', short: 'RN', tier: 3, kind: 'barracks', cost: 270, hp: 820,
+      desc: 'Spawns Storm Rocs: huge flying raptors that wreck buildings and snatch ground units out of the fight.',
+      spawn: { interval: 22, unit: { id: 'storm_roc', name: 'Storm Roc', hp: 750, dmg: 38, cooldown: 1.8, range: 14, speed: 30, attack: 'siege', armor: 'heavy', bounty: 25, size: 16, flying: true, stun: { duration: 2, every: 7 } } },
+    },
+    {
+      id: 'eye_of_storm', name: 'Eye of the Storm', short: 'ES', tier: 3, kind: 'tower', cost: 235, hp: 680,
+      desc: 'Tower. Lightning that chains to 3 targets. Hits air.',
+      tower: { dmg: 24, cooldown: 1.2, range: 210, attack: 'magic', hitsAir: true, chain: 3 },
+    },
+  ],
+};
+
+// ---------- Hollow Choir ----------
+const choir: FactionDef = {
+  id: 'choir',
+  name: 'Hollow Choir',
+  tagline: 'Arcane spirits that rise again.',
+  color: '#8b80f0',
+  dark: '#2a2560',
+  shape: 'hex',
+  mechanic: 'echo',
+  mechanicText: 'Echo: a fallen unit has a 25% chance to rise as a ghostly Echo (40% HP, fades after 15 s, no bounty). Revenants always return once.',
+  buildings: [
+    {
+      id: 'lantern_hall', name: 'Lantern Hall', short: 'LH', tier: 1, kind: 'barracks', cost: 60, hp: 400,
+      desc: 'Spawns Shades: hooded melee spirits with Arcane armor.',
+      spawn: { interval: 9, unit: { id: 'shade', name: 'Shade', hp: 160, dmg: 13, cooldown: 1.0, range: 6, speed: 40, attack: 'normal', armor: 'arcane', bounty: 6, size: 9 } },
+    },
+    {
+      id: 'hymn_loft', name: 'Hymn Loft', short: 'HL', tier: 1, kind: 'barracks', cost: 70, hp: 380,
+      desc: 'Spawns Cantors: ranged singers whose song slows. Hit air.',
+      spawn: { interval: 10, unit: { id: 'cantor', name: 'Cantor', hp: 100, dmg: 12, cooldown: 1.1, range: 125, speed: 40, attack: 'magic', armor: 'light', bounty: 6, size: 7, hitsAir: true, slowOnHit: { pct: 0.2, dur: 1 } } },
+    },
+    {
+      id: 'bell_tower', name: 'Bell Tower', short: 'BT', tier: 1, kind: 'tower', cost: 80, hp: 500,
+      desc: 'Tower. Rings every 2 s, hitting ALL enemies in range. Great vs swarms. Hits air.',
+      tower: { dmg: 11, cooldown: 2.0, range: 150, attack: 'magic', hitsAir: true, pulse: true },
+    },
+    {
+      id: 'crypt_of_echoes', name: 'Crypt of Echoes', short: 'CE', tier: 2, kind: 'barracks', cost: 150, hp: 600,
+      desc: 'Spawns Revenants: armored dead knights that always return once as an Echo.',
+      spawn: { interval: 16, unit: { id: 'revenant', name: 'Revenant', hp: 480, dmg: 26, cooldown: 1.4, range: 8, speed: 30, attack: 'normal', armor: 'heavy', bounty: 14, size: 13, alwaysEcho: true } },
+    },
+    {
+      id: 'hex_chapel', name: 'Hex Chapel', short: 'HC', tier: 2, kind: 'barracks', cost: 140, hp: 480,
+      desc: 'Spawns Hexers: cursers whose hits make the target take +25% damage for 4 s. Hit air.',
+      spawn: { interval: 14, unit: { id: 'hexer', name: 'Hexer', hp: 105, dmg: 14, cooldown: 1.3, range: 115, speed: 40, attack: 'magic', armor: 'arcane', bounty: 10, size: 8, hitsAir: true, curse: { mult: 1.25, dur: 4 } } },
+    },
+    {
+      id: 'soul_font', name: 'Soul Font', short: 'SF', tier: 2, kind: 'econ', cost: 110, hp: 420,
+      desc: 'Economy: +2 gold per tick, plus 1 gold for every enemy unit that dies within 250 px.',
+      income: 2, soulFont: { radius: 250, gold: 1 },
+    },
+    {
+      id: 'requiem_organ', name: 'Requiem Organ', short: 'RO', tier: 3, kind: 'barracks', cost: 260, hp: 800,
+      desc: 'Spawns the Dirge: a flying banshee whose scream silences nearby enemy towers for 3 s. Hits air.',
+      spawn: { interval: 22, unit: { id: 'dirge', name: 'Dirge', hp: 560, dmg: 26, cooldown: 1.4, range: 95, speed: 28, attack: 'magic', armor: 'arcane', bounty: 25, size: 15, flying: true, hitsAir: true, silence: { radius: 130, duration: 3, every: 9 } } },
+    },
+    {
+      id: 'choir_obelisk', name: 'Choir Obelisk', short: 'CO', tier: 3, kind: 'tower', cost: 235, hp: 680,
+      desc: 'Tower. Draining beam that heals your Heartstone by 20% of the damage it deals. Hits air.',
+      tower: { dmg: 30, cooldown: 1.0, range: 210, attack: 'magic', hitsAir: true, coreHeal: 0.2 },
+    },
+  ],
+};
+
+export const FACTIONS: Record<FactionId, FactionDef> = { union, bloomkin, aerie, choir };
+export const FACTION_IDS: FactionId[] = ['union', 'bloomkin', 'aerie', 'choir'];
 
 const byId = new Map<string, BuildingDef>();
 for (const f of Object.values(FACTIONS)) for (const b of f.buildings) byId.set(`${f.id}:${b.id}`, b);

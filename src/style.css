@@ -59,16 +59,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .overlay { position: absolute; inset: 0; background: #070b18d9; display: flex; align-items: center; justify-content: center; z-index: 5; }
 .overlay.hidden { display: none; }
-.panel { width: 640px; background: #121a33; border: 1px solid #34436e; border-radius: 14px; padding: 20px 28px; text-align: center; }
+.panel { width: 820px; background: #121a33; border: 1px solid #34436e; border-radius: 14px; padding: 20px 28px; text-align: center; }
 .panel h1 { margin: 0; font-size: 34px; letter-spacing: 1px; }
 .panel h3 { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #9fb0d0; }
 .choices { display: flex; gap: 8px; justify-content: center; }
 .choices button { background: #1c2747; border: 2px solid #34436e; border-radius: 8px; padding: 6px 14px; }
 .choices button.sel { border-color: #ffd84a; background: #2a3966; }
-.choices .fac { width: 260px; padding: 10px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.choices .fac { width: 186px; padding: 10px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
 .choices .fac span { font-size: 12px; color: #c9d4ee; }
 .choices .fac.union b { color: #e8a85a; }
 .choices .fac.bloomkin b { color: #7fd977; }
+.choices .fac.aerie b { color: #8fe3d8; }
+.choices .fac.choir b { color: #a59cff; }
+.mech-row { display: flex; align-items: center; gap: 8px; }
+#ability-btn { background: #1f4f55; border: 1px solid #7fd3c8; border-radius: 6px; padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+#ability-btn:disabled { opacity: 0.5; cursor: default; }
+#ability-btn.hidden { display: none; }
+.ltabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.ltabs button { background: #1c2747; border: 1px solid #34436e; border-radius: 6px; padding: 2px 10px; font-size: 12px; }
+.ltabs button.sel { border-color: #ffd84a; background: #2a3966; }
 .primary { margin-top: 16px; background: #e0a83a; color: #1a1205; border: 0; border-radius: 10px; padding: 10px 28px; font-size: 18px; font-weight: 700; }
 #to-menu { margin-left: 8px; background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 10px 18px; }
 .help { font-size: 12px; line-height: 1.45; margin: 14px 0 0; }

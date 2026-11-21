@@ -1,4 +1,5 @@
 import { Bot, INCOME_MULT, type Difficulty } from '../ai/bot';
+import { FACTION_IDS } from '../data/factions';
 import type { FactionId } from '../data/types';
 import { World, type PlayerConfig } from '../sim/world';
 
@@ -14,7 +15,12 @@ export interface MatchSetup {
   human: boolean;
 }
 
-const other = (f: FactionId): FactionId => (f === 'union' ? 'bloomkin' : 'union');
+/** A different faction than `f`, picked deterministically from the seed. */
+export function otherFaction(f: FactionId, seed: number, avoid: FactionId[] = []): FactionId {
+  const pool = FACTION_IDS.filter((x) => x !== f && !avoid.includes(x));
+  const list = pool.length ? pool : FACTION_IDS.filter((x) => x !== f);
+  return list[(seed >>> 0) % list.length];
+}
 
 /** Wraps a World with its bots. Same setup + same commands => same result. */
 export class Match {
@@ -27,9 +33,10 @@ export class Match {
     const players: PlayerConfig[] = [
       { team: 0, slot: 0, faction: setup.playerFaction, isHuman: setup.human, name: setup.human ? 'You' : 'Blue bot' },
     ];
-    if (setup.mode === '2v2') players.push({ team: 0, slot: 1, faction: other(setup.playerFaction), isHuman: false, name: 'Ally bot' });
+    const ally = otherFaction(setup.playerFaction, setup.seed);
+    if (setup.mode === '2v2') players.push({ team: 0, slot: 1, faction: ally, isHuman: false, name: 'Ally bot' });
     players.push({ team: 1, slot: 0, faction: setup.enemyFaction, isHuman: false, name: 'Red bot', incomeMult: enemyMult });
-    if (setup.mode === '2v2') players.push({ team: 1, slot: 1, faction: other(setup.enemyFaction), isHuman: false, name: 'Red bot 2', incomeMult: enemyMult });
+    if (setup.mode === '2v2') players.push({ team: 1, slot: 1, faction: otherFaction(setup.enemyFaction, setup.seed >>> 3), isHuman: false, name: 'Red bot 2', incomeMult: enemyMult });
 
     this.world = new World({ seed: setup.seed, players });
     this.humanId = setup.human ? 0 : -1;

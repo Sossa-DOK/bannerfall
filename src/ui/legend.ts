@@ -1,5 +1,5 @@
 import { ARMORS, DAMAGE, cap, strongVs, weakVs } from '../data/damage';
-import { FACTIONS } from '../data/factions';
+import { FACTIONS, FACTION_IDS } from '../data/factions';
 import type { ArmorType, AttackType, BuildingDef, FactionId, UnitDef } from '../data/types';
 import { ATTACK_COLORS, drawUnitShape } from '../render/shapes';
 import type { World } from '../sim/world';
@@ -23,6 +23,7 @@ function attackersOf(faction: FactionId): Attacker[] {
   for (const def of FACTIONS[faction].buildings) {
     if (def.spawn) {
       const u = def.spawn.unit;
+      if (u.heal) continue; // healers don't attack
       out.push({ def, attack: u.attack, hitsAir: !!u.hitsAir, hitsGround: u.hitsGround ?? true });
     } else if (def.tower) out.push({ def, attack: def.tower.attack, hitsAir: def.tower.hitsAir, hitsGround: true });
   }
@@ -44,7 +45,7 @@ export function countersFor(faction: FactionId, armor: ArmorType, flying: boolea
 
 function traits(u: UnitDef, count: number): string {
   const t: string[] = [];
-  t.push(u.range > 60 ? 'ranged' : 'melee');
+  if (!u.heal) t.push(u.range > 60 ? 'ranged' : 'melee');
   if (count > 1) t.push(`swarm ×${count}`);
   if (u.flying) t.push('flying');
   if (u.hitsAir) t.push('hits air');
@@ -53,6 +54,13 @@ function traits(u: UnitDef, count: number): string {
   if (u.regen) t.push('heals itself');
   if (u.root) t.push('roots enemies');
   if (u.preferRanged) t.push('hunts ranged');
+  if (u.heal) t.push('heals allies, no attack');
+  if (u.dive) t.push('double-damage first strike');
+  if (u.stun) t.push('snatches ground units');
+  if (u.curse) t.push('curses: +25% damage taken');
+  if (u.slowOnHit) t.push('slows');
+  if (u.silence) t.push('silences towers');
+  if (u.alwaysEcho) t.push('always returns once');
   return t.join(' · ');
 }
 
@@ -84,8 +92,21 @@ export class Legend {
     });
   }
 
-  show(viewer: FactionId) {
-    const enemy: FactionId = viewer === 'union' ? 'bloomkin' : 'union';
+  private viewer: FactionId = 'union';
+  private enemy: FactionId = 'bloomkin';
+
+  /** viewer = your faction; enemy = which enemy faction to show first (tabs switch it). */
+  show(viewer: FactionId, enemy?: FactionId) {
+    this.viewer = viewer;
+    this.enemy = enemy && enemy !== viewer ? enemy : FACTION_IDS.find((f) => f !== viewer)!;
+    this.render();
+    this.el.classList.remove('hidden');
+    this.open = true;
+  }
+
+  private render() {
+    const viewer = this.viewer;
+    const enemy = this.enemy;
     const col = (f: FactionId) => {
       const fac = FACTIONS[f];
       const rows = fac.buildings
@@ -100,8 +121,11 @@ export class Legend {
             <canvas data-unit="${u.id}" data-dir="${f === viewer ? 1 : -1}" width="80" height="64"></canvas>
             <div class="ltxt">
               <div><b>${u.name}</b> <span class="muted">from ${b.name} · T${b.tier}</span></div>
-              <div>${atkChip(u.attack)} attack · ${armChip(u.armor)} armor <span class="muted">· ${traits(u, b.spawn!.count ?? 1)}</span></div>
-              <div class="muted">Strong vs <b>${strong}</b> armor · weak vs ${weak}</div>
+              ${u.heal
+                ? `<div>Support · ${armChip(u.armor)} armor <span class="muted">· ${traits(u, b.spawn!.count ?? 1)}</span></div>
+                   <div class="muted">Heals the most-hurt ally nearby by <b>${u.heal} HP</b> every second</div>`
+                : `<div>${atkChip(u.attack)} attack · ${armChip(u.armor)} armor <span class="muted">· ${traits(u, b.spawn!.count ?? 1)}</span></div>
+                   <div class="muted">Strong vs <b>${strong}</b> armor · weak vs ${weak}</div>`}
               ${f === viewer ? '' : `<div class="ctr">Counter it with: <b>${ctrTxt}</b></div>`}
             </div></div>`;
         })
@@ -112,6 +136,9 @@ export class Legend {
     this.el.innerHTML = `<div class="panel legend-panel">
       <button class="legend-close">✕ Close (L)</button>
       <h1>Units &amp; counters</h1>
+      <div class="ltabs"><span class="muted">Show enemy:</span>${FACTION_IDS.filter((f) => f !== viewer)
+        .map((f) => `<button data-enemy="${f}" class="${f === enemy ? 'sel' : ''}">${FACTIONS[f].name}</button>`)
+        .join('')}</div>
       <div class="lgrid">
         <div class="lcol narrow">
           <h2>How damage works</h2>
@@ -132,7 +159,12 @@ export class Legend {
       const def = Object.values(FACTIONS).flatMap((f) => f.buildings).find((b) => b.spawn?.unit.id === id)!.spawn!.unit;
       drawUnitShape(c, id, 20, 17, Math.min(12, def.size * 0.9), '#ffffff', 1.5, Number(cv.dataset.dir));
     });
-    this.el.classList.remove('hidden');
+    this.el.querySelectorAll<HTMLButtonElement>('.ltabs button').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.enemy = b.dataset.enemy as FactionId;
+        this.render();
+      }),
+    );
     this.open = true;
   }
 

@@ -7,7 +7,7 @@ import { BLOOM_TIME, MAX_RANK, type Building, type SimEvent, type World } from '
 export const TEAM_COLORS = ['#4aa3ff', '#ff5a5a'];
 
 interface Fx {
-  kind: 'shot' | 'splash' | 'death' | 'text' | 'root' | 'rank';
+  kind: 'shot' | 'splash' | 'death' | 'text' | 'root' | 'rank' | 'gale';
   t0: number;
   life: number;
   x: number;
@@ -70,6 +70,21 @@ export class Renderer {
           break;
         case 'rank':
           this.fx.push({ kind: 'rank', t0: now, life: 1.0, x: e.x, y: e.y - 22, color: e.bloom ? '#9be36b' : '#ffffff', text: e.bloom ? 'Bloom!' : 'Rank up' });
+          break;
+        case 'gale':
+          this.fx.push({ kind: 'gale', t0: now, life: 0.8, x: e.team === 0 ? 1 : -1, y: 0, color: '#e8fbff' });
+          break;
+        case 'heal':
+          this.fx.push({ kind: 'text', t0: now, life: 0.6, x: e.x, y: e.y - 8, color: '#7dff8a', text: '+' });
+          break;
+        case 'silence':
+          this.fx.push({ kind: 'root', t0: now, life: 0.7, x: e.x, y: e.y, r: e.r, color: '#c08cff' });
+          break;
+        case 'echo':
+          this.fx.push({ kind: 'root', t0: now, life: 0.6, x: e.x, y: e.y, r: 22, color: '#a8ffe0' });
+          break;
+        case 'stun':
+          this.fx.push({ kind: 'root', t0: now, life: 0.5, x: e.x, y: e.y, r: 16, color: '#ffe066' });
           break;
       }
     }
@@ -168,15 +183,18 @@ export class Renderer {
     }
 
     c.fillStyle = fac.dark;
-    if (fac.shape === 'circle') {
-      c.beginPath();
-      c.arc(b.x, b.y, s / 2, 0, Math.PI * 2);
-    } else roundRect(c, x, y, s, s, 4);
+    tileShape(c, fac.shape, b.x, b.y, s);
     c.fill();
     c.strokeStyle = TEAM_COLORS[b.team];
     c.lineWidth = 2;
     c.stroke();
     drawBuildingIcon(c, b.def, b.x, b.y + 1, s, fac.color, b.team === 0 ? 1 : -1);
+    if (b.silenceT > 0) {
+      c.strokeStyle = '#c08cff';
+      c.lineWidth = 3;
+      line(c, x + 3, y + 3, x + s - 3, y + s - 3);
+      line(c, x + s - 3, y + 3, x + 3, y + s - 3);
+    }
 
     // rank pips
     for (let i = 0; i < b.rank; i++) {
@@ -269,7 +287,23 @@ export class Renderer {
       c.fill();
       y = u.y - 12 + Math.sin(now * 4 + u.id) * 1.5;
     }
-    drawUnitShape(c, u.def.id, u.x, y, r, TEAM_COLORS[u.team], r >= 13 ? 3 : 2, u.team === 0 ? 1 : -1);
+    if (u.stunT > 0) y -= 8; // snatched into the air
+    if (u.echo) c.globalAlpha = 0.5;
+    drawUnitShape(c, u.def.id, u.x, y, r, u.echo ? '#a8ffe0' : TEAM_COLORS[u.team], r >= 13 ? 3 : 2, u.team === 0 ? 1 : -1);
+    c.globalAlpha = 1;
+    if (u.stunT > 0) {
+      c.strokeStyle = '#ffe066';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(u.x, y, r + 4, 0, Math.PI * 2);
+      c.stroke();
+    }
+    if (u.curseT > 0) {
+      c.fillStyle = '#ff6ad5';
+      c.beginPath();
+      c.arc(u.x + r, y - r, 2.5, 0, Math.PI * 2);
+      c.fill();
+    }
     if (u.flying) {
       c.strokeStyle = 'rgba(255,255,255,0.7)';
       c.lineWidth = 1.5;
@@ -313,6 +347,20 @@ export class Renderer {
           c.arc(f.x, f.y, f.r! * (0.4 + k), 0, Math.PI * 2);
           c.fill();
           break;
+        case 'gale': {
+          // a bright gust sweeping down the bridge, away from the caster
+          const dir = f.x;
+          const span = L.CORE_X[1] - L.CORE_X[0];
+          const front = dir > 0 ? L.CORE_X[0] + span * k : L.CORE_X[1] - span * k;
+          const g = c.createLinearGradient(front - dir * 220, 0, front, 0);
+          g.addColorStop(0, 'rgba(232,251,255,0)');
+          g.addColorStop(1, 'rgba(232,251,255,0.55)');
+          c.fillStyle = g;
+          c.globalAlpha = 1;
+          const x0 = Math.min(front, front - dir * 220);
+          c.fillRect(x0, L.LANE_Y - L.LANE_HALF - 10, 220, L.LANE_HALF * 2 + 20);
+          break;
+        }
         case 'text':
         case 'rank':
           c.fillStyle = f.color;
@@ -332,6 +380,29 @@ function line(c: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y
   c.moveTo(x1, y1);
   c.lineTo(x2, y2);
   c.stroke();
+}
+
+/** Building tile outline per faction: Union square, Bloomkin circle, Aerie diamond, Choir hexagon. */
+function tileShape(c: CanvasRenderingContext2D, shape: string, cx: number, cy: number, s: number) {
+  const h = s / 2;
+  c.beginPath();
+  if (shape === 'circle') c.arc(cx, cy, h, 0, Math.PI * 2);
+  else if (shape === 'diamond') {
+    c.moveTo(cx, cy - h - 2);
+    c.lineTo(cx + h + 2, cy);
+    c.lineTo(cx, cy + h + 2);
+    c.lineTo(cx - h - 2, cy);
+    c.closePath();
+  } else if (shape === 'hex') {
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i;
+      const px = cx + Math.cos(a) * (h + 1);
+      const py = cy + Math.sin(a) * (h + 1);
+      if (i === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+  } else roundRect(c, cx - h, cy - h, s, s, 4);
 }
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

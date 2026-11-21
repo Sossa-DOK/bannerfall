@@ -118,7 +118,19 @@ export class Tutorial {
         enter: () => topUp(120),
         done: () => mine().some((b) => b.rank >= 2),
       },
-      fac.mechanic === 'overclock'
+      fac.mechanic === 'gale'
+        ? {
+            text: `Aerie special — <b>Gale</b>: press <b>G</b> (or the 🌬 Gale button, bottom-left) to blow every enemy ground unit back down the bridge and slow it. Recharges in 60 s.`,
+            glow: '#ability-btn',
+            enter: () => (me.abilityCd = 0),
+            done: () => me.abilityCd > 0,
+          }
+        : fac.mechanic === 'echo'
+        ? {
+            text: `Choir special — <b>Echo</b>: when one of your units falls, it sometimes rises again as a see-through Echo for 15 s. Revenants always return once. Enemies get no gold for killing Echoes.`,
+            button: 'Got it',
+          }
+        : fac.mechanic === 'overclock'
         ? {
             text: `Union special — <b>Overclock</b>: select a barracks and press <b>O</b>. It spawns twice as fast for 20 s, but costs 25% of its HP.`,
             glow: '#sel-panel',

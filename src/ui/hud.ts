@@ -8,6 +8,7 @@ export interface HudHandlers {
   selectBuild(def: BuildingDef | null): void;
   upgrade(): void;
   overclock(): void;
+  ability(): void;
   setSpeed(n: number): void;
   togglePause(): void;
 }
@@ -19,9 +20,10 @@ export function describe(def: BuildingDef): string {
   const lines = [def.desc];
   const atk = def.spawn?.unit.attack ?? def.tower?.attack;
   const u = def.spawn?.unit;
-  if (u) lines.push(`${u.name}: ${Math.round(u.hp)} HP, ${u.dmg} dmg, ${cap(u.attack)} attack / ${cap(u.armor)} armor${u.flying ? ', flying' : ''}`);
+  if (u?.heal) lines.push(`${u.name}: ${Math.round(u.hp)} HP, heals ${u.heal} per second, ${cap(u.armor)} armor${u.flying ? ', flying' : ''}`);
+  else if (u) lines.push(`${u.name}: ${Math.round(u.hp)} HP, ${u.dmg} dmg, ${cap(u.attack)} attack / ${cap(u.armor)} armor${u.flying ? ', flying' : ''}`);
   if (def.tower) lines.push(`${def.tower.dmg} dmg, range ${def.tower.range}, ${cap(def.tower.attack)} attack`);
-  if (atk) {
+  if (atk && !u?.heal) {
     const s = strongVs(atk).map(cap).join(', ');
     const wk = weakVs(atk).map(cap).join(', ');
     if (s) lines.push(`Strong vs ${s}`);
@@ -42,6 +44,7 @@ export class Hud {
     $('#pause-btn', root).addEventListener('click', () => this.h.togglePause());
     $('#sel-upgrade', root).addEventListener('click', () => this.h.upgrade());
     $('#sel-overclock', root).addEventListener('click', () => this.h.overclock());
+    $('#ability-btn', root).addEventListener('click', () => this.h.ability());
   }
 
   setup(w: World, humanId: number) {
@@ -64,6 +67,7 @@ export class Hud {
       return { def, el };
     });
     $('#mechanic', this.root).textContent = fac.mechanicText;
+    $('#ability-btn', this.root).classList.toggle('hidden', fac.mechanic !== 'gale');
     this.last = '';
   }
 
@@ -98,6 +102,11 @@ export class Hud {
 
     this.root.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('active', Number(b.dataset.speed) === speed));
     $('#pause-btn', this.root).textContent = paused ? '▶ Resume' : '❚❚ Pause';
+    if (FACTIONS[p.faction].mechanic === 'gale') {
+      const ab = $<HTMLButtonElement>('#ability-btn', this.root);
+      ab.disabled = !w.canGale(humanId);
+      ab.textContent = p.abilityCd > 0 ? `🌬 Gale in ${Math.ceil(p.abilityCd)}s` : '🌬 Gale (G) — ready';
+    }
 
     const panel = $('#sel-panel', this.root);
     if (!sel || !sel.alive) {

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Bannerfall — gray-box prototype</title>
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="game"></canvas>
+
+      <div id="topbar" class="hud">
+        <div class="tb-left">
+          <span class="gold">⛁ <b id="gold">0</b></span>
+          <span id="income" class="muted"></span>
+        </div>
+        <div class="tb-mid"><b id="clock">0:00</b> <span id="tier" class="muted"></span></div>
+        <div class="tb-right">
+          <div class="core" id="core0"><span>Blue</span><div class="bar"><i></i></div><b></b></div>
+          <div class="core red" id="core1"><span>Red</span><div class="bar"><i></i></div><b></b></div>
+          <div id="speed"><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div>
+          <button id="legend-btn">📖 Units (L)</button>
+          <button id="pause-btn">❚❚ Pause</button>
+        </div>
+      </div>
+
+      <div id="bottombar" class="hud">
+        <div id="build-col">
+          <div id="build-buttons"></div>
+          <div id="mechanic" class="muted"></div>
+        </div>
+        <div id="sel-panel" class="empty">
+          <div id="sel-title"></div>
+          <div id="sel-info"></div>
+          <div id="sel-actions"><button id="sel-upgrade"></button><button id="sel-overclock"></button></div>
+        </div>
+      </div>
+
+      <div id="scout" class="hud"></div>
+      <div id="toast" class="hud"></div>
+
+      <div id="menu" class="overlay">
+        <div class="panel">
+          <h1>Bannerfall</h1>
+          <p class="muted">Gray-box prototype · Shardlands lane battler</p>
+          <h3>Your faction</h3>
+          <div class="choices" data-group="faction">
+            <button data-value="union" class="fac union"><b>Brasswright Union</b><span>Tough, expensive, strong late. Overclock barracks.</span></button>
+            <button data-value="bloomkin" class="fac bloomkin"><b>Bloomkin Grove</b><span>Cheap swarms. Buildings Bloom (self-upgrade) over time.</span></button>
+          </div>
+          <h3>Enemy faction</h3>
+          <div class="choices small" data-group="enemy">
+            <button data-value="other">Opposite</button><button data-value="union">Union</button><button data-value="bloomkin">Bloomkin</button>
+          </div>
+          <h3>Mode</h3>
+          <div class="choices small" data-group="mode">
+            <button data-value="1v1">1v1 vs AI</button><button data-value="2v2">2v2 (AI teammate)</button>
+          </div>
+          <h3>Difficulty</h3>
+          <div class="choices small" data-group="difficulty">
+            <button data-value="easy">Easy</button><button data-value="normal">Normal</button><button data-value="hard">Hard</button>
+          </div>
+          <button id="start" class="primary">Start match</button>
+          <button id="menu-legend">📖 Units &amp; counters</button>
+          <button id="tutorial-btn">🎓 Tutorial</button>
+          <p class="help muted">
+            Build barracks on your grid: they spawn units that march down the bridge on their own. Towers defend your side.
+            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
+          </p>
+        </div>
+      </div>
+
+      <div id="pause-menu" class="overlay hidden">
+        <div class="panel pause-panel">
+          <h1>Paused</h1>
+          <button id="pm-resume" class="primary">▶ Resume</button>
+          <div class="pm-row">
+            <button id="pm-legend">📖 Units &amp; counters</button>
+            <button id="pm-restart">↻ Restart match</button>
+            <button id="pm-exit">⏏ Exit to main menu</button>
+          </div>
+          <p class="muted help">Space, P or Esc to resume</p>
+        </div>
+      </div>
+
+      <div id="end" class="overlay hidden">
+        <div class="panel">
+          <h1 id="end-title">Victory</h1>
+          <p id="end-stats" class="muted"></p>
+          <button id="again" class="primary">Next match</button>
+          <button id="to-menu">Change setup</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

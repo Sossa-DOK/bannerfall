@@ -1,4 +1,5 @@
 import { DAMAGE } from '../data/damage';
+import { CARD_UNLOCK, getCard } from '../data/cards';
 import { FACTIONS, getBuildingDef } from '../data/factions';
 import type { ArmorType, AttackType, BuildingDef, FactionId, TowerDef, UnitDef } from '../data/types';
 import * as L from './layout';
@@ -103,6 +104,10 @@ export interface PlayerState {
   built: number;
   /** faction active ability (Gale) cooldown */
   abilityCd: number;
+  /** Commander Cards brought to this match (single use each) */
+  cards: { id: string; used: boolean }[];
+  /** Lament: this many upcoming deaths become Echoes */
+  lament: number;
 }
 
 export interface PlayerConfig {
@@ -112,6 +117,25 @@ export interface PlayerConfig {
   isHuman: boolean;
   name: string;
   incomeMult?: number;
+  cards?: string[];
+}
+
+/** Timed team-wide effect from a Commander Card. */
+export interface TeamBuff {
+  kind: 'plating' | 'rally' | 'tailwind';
+  team: number;
+  t: number;
+}
+
+/** Ground effect from a Commander Card. */
+export interface Zone {
+  kind: 'pollen' | 'feathers';
+  team: number;
+  owner: number;
+  x: number;
+  y: number;
+  r: number;
+  t: number;
 }
 
 export interface MatchConfig {
@@ -130,7 +154,8 @@ export type SimEvent =
   | { type: 'heal'; x: number; y: number }
   | { type: 'silence'; x: number; y: number; r: number }
   | { type: 'echo'; x: number; y: number }
-  | { type: 'stun'; x: number; y: number };
+  | { type: 'stun'; x: number; y: number }
+  | { type: 'card'; owner: number; card: string; x: number; y: number; r: number };
 
 interface AttackOpts {
   splash?: number;
@@ -158,6 +183,8 @@ export class World {
   private teamCap = [0, 0];
   private incomeT = 0;
   private pendingEchoes: Unit[] = [];
+  buffs: TeamBuff[] = [];
+  zones: Zone[] = [];
   /** events raised by commands between steps (e.g. Gale, manual upgrade) */
   private cmdEvents: SimEvent[] = [];
   private inStep = false;
@@ -171,6 +198,7 @@ export class World {
     this.players = cfg.players.map((p, i) => ({
       id: i, team: p.team, slot: p.slot, faction: p.faction, gold: START_GOLD, isHuman: p.isHuman,
       incomeMult: p.incomeMult ?? 1, name: p.name, kills: 0, built: 0, abilityCd: 20,
+      cards: (p.cards ?? []).map((id) => ({ id, used: false })), lament: 0,
     }));
     this.cores = [0, 1].map((team) => ({
       id: this.nextId++, kind: 'core' as const, team, x: L.CORE_X[team], y: L.LANE_Y,
@@ -254,6 +282,111 @@ export class World {
   canGale(pid: number) {
     const p = this.players[pid];
     return FACTIONS[p.faction].mechanic === 'gale' && p.abilityCd <= 0 && this.winner === null;
+  }
+
+  hasBuff(team: number, kind: TeamBuff['kind']) {
+    return this.buffs.some((b) => b.team === team && b.kind === kind);
+  }
+
+  private inEnemyZone(u: Unit, kind: Zone['kind']) {
+    return this.zones.some((z) => z.kind === kind && z.team !== u.team && dist(u, z) <= z.r);
+  }
+
+  /** Can card slot `idx` be played (ignoring the aim point)? */
+  canCast(pid: number, idx: number): { ok: boolean; reason?: string } {
+    const p = this.players[pid];
+    const slot = p?.cards[idx];
+    if (!slot) return { ok: false, reason: 'No card' };
+    if (slot.used) return { ok: false, reason: 'Already used' };
+    if (this.time < CARD_UNLOCK) return { ok: false, reason: `Cards unlock at ${Math.floor(CARD_UNLOCK / 60)}:${String(CARD_UNLOCK % 60).padStart(2, '0')}` };
+    if (slot.id === 'second_gale' && p.abilityCd <= 0) return { ok: false, reason: 'Gale is already ready' };
+    if (slot.id === 'double_shift' && !this.buildings.some((b) => b.owner === pid && b.def.kind !== 'tower')) return { ok: false, reason: 'No buildings to overclock' };
+    if (slot.id === 'heart_pulse' && this.cores[p.team].hp >= this.cores[p.team].maxHp) return { ok: false, reason: 'Heartstone is at full HP' };
+    return { ok: true };
+  }
+
+  /** Is (x, y) a valid aim point for this card? */
+  validCardTarget(pid: number, idx: number, x: number, y: number): boolean {
+    const p = this.players[pid];
+    const card = getCard(p.cards[idx].id);
+    if (card.target === 'none' || card.target === 'area') return true;
+    if (card.target === 'ownHalf') return p.team === 0 ? x < L.W / 2 && x > L.CORE_X[0] : x > L.W / 2 && x < L.CORE_X[1];
+    return !!this.cardBuildingAt(pid, x, y);
+  }
+
+  private cardBuildingAt(pid: number, x: number, y: number) {
+    return this.buildings.find((b) => b.owner === pid && b.alive && b.rank < MAX_RANK && Math.abs(b.x - x) <= L.TILE / 2 && Math.abs(b.y - y) <= L.TILE / 2);
+  }
+
+  /** Play a Commander Card. (x, y) is the aim point for targeted cards. */
+  cast(pid: number, idx: number, x = 0, y = 0): boolean {
+    if (!this.canCast(pid, idx).ok || !this.validCardTarget(pid, idx, x, y)) return false;
+    const p = this.players[pid];
+    const slot = p.cards[idx];
+    const card = getCard(slot.id);
+    const enemyUnits = this.units.filter((u) => u.alive && u.team !== p.team);
+    const core = this.cores[p.team];
+    let fx = { x, y, r: card.radius ?? 0 };
+    switch (card.id) {
+      case 'gearstorm':
+        for (const u of enemyUnits) if (dist(u, { x, y }) - u.radius <= card.radius!) this.hurt(u, 100, 'pierce', pid);
+        break;
+      case 'plating':
+      case 'rally':
+        this.buffs.push({ kind: card.id, team: p.team, t: card.id === 'plating' ? 8 : 10 });
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'tailwind':
+        this.buffs.push({ kind: 'tailwind', team: p.team, t: 10 });
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'double_shift':
+        for (const b of this.buildings) if (b.owner === pid && b.alive && b.def.kind !== 'tower') b.ocT = 20;
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'overgrowth': {
+        const b = this.cardBuildingAt(pid, x, y)!;
+        while (b.rank < MAX_RANK) this.rankUp(b, true);
+        fx = { x: b.x, y: b.y, r: 30 };
+        break;
+      }
+      case 'pollen':
+        this.zones.push({ kind: 'pollen', team: p.team, owner: pid, x, y, r: card.radius!, t: 6 });
+        break;
+      case 'feather_storm':
+        this.zones.push({ kind: 'feathers', team: p.team, owner: pid, x, y, r: card.radius!, t: 3 });
+        break;
+      case 'seedfall': {
+        const def = getBuildingDef('bloomkin', 'sprout_patch')!.spawn!.unit;
+        const cy = Math.max(L.LANE_Y - L.LANE_HALF + 10, Math.min(L.LANE_Y + L.LANE_HALF - 10, y));
+        for (let i = 0; i < 6; i++) this.spawnAt(pid, def, x + this.rng.range(-20, 20), cy + this.rng.range(-20, 20), 1);
+        fx = { x, y: cy, r: 30 };
+        break;
+      }
+      case 'second_gale':
+        p.abilityCd = 0;
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'lament':
+        p.lament += 6;
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'funeral_bell':
+        for (const b of this.buildings) if (b.team !== p.team && b.def.tower) b.silenceT = 4;
+        fx = { x: this.cores[1 - p.team].x, y: L.LANE_Y, r: 80 };
+        break;
+      case 'soul_harvest':
+        p.gold += Math.min(240, enemyUnits.length * 3);
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+      case 'heart_pulse':
+        core.hp = Math.min(core.maxHp, core.hp + core.maxHp * 0.15);
+        fx = { x: core.x, y: core.y, r: 60 };
+        break;
+    }
+    slot.used = true;
+    this.emit({ type: 'card', owner: pid, card: card.id, ...fx });
+    return true;
   }
 
   // ---------------- commands ----------------
@@ -340,6 +473,15 @@ export class World {
 
     for (const b of this.buildings) this.updateBuilding(b, dt, teamCount);
     for (const c of this.cores) this.updateTower(c, CORE_TOWER, c.team, -1, 1, dt);
+    for (const b of this.buffs) b.t -= dt;
+    this.buffs = this.buffs.filter((b) => b.t > 0);
+    for (const z of this.zones) {
+      z.t -= dt;
+      if (z.kind === 'feathers')
+        for (const u of this.units) if (u.alive && u.team !== z.team && dist(u, z) - u.radius <= z.r) this.hurt(u, 30 * dt, 'normal', z.owner, true);
+    }
+    this.zones = this.zones.filter((z) => z.t > 0);
+
     for (const u of this.units) if (u.alive) this.updateUnit(u, dt);
     this.separate();
 
@@ -380,11 +522,15 @@ export class World {
   }
 
   private spawnUnit(b: Building, def: UnitDef) {
-    const m = rankMult(b.rank);
+    this.spawnAt(b.owner, def, b.x + this.rng.range(-8, 8), b.y + this.rng.range(-8, 8), rankMult(b.rank));
+  }
+
+  private spawnAt(owner: number, def: UnitDef, x: number, y: number, m: number) {
     const hp = def.hp * m;
+    const team = this.players[owner].team;
     this.units.push({
-      id: this.nextId++, kind: 'unit', team: b.team, owner: b.owner, def,
-      x: b.x + this.rng.range(-8, 8), y: b.y + this.rng.range(-8, 8),
+      id: this.nextId++, kind: 'unit', team, owner, def,
+      x, y,
       hp, maxHp: hp, radius: def.size, armor: def.armor, flying: !!def.flying, alive: true,
       mult: m, cd: 0, target: null, retarget: 0, slowT: 0, slowPct: 0, rootT: 0, lastHurt: -99,
       abilityT: (def.root?.every ?? def.silence?.every ?? 0) * 0.5,
@@ -482,16 +628,18 @@ export class World {
       u.retarget = 0.3;
     }
 
-    const speed = u.rootT > 0 ? 0 : d.speed * (u.slowT > 0 ? 1 - u.slowPct : 1);
+    const speed = u.rootT > 0 ? 0 : d.speed * (u.slowT > 0 ? 1 - u.slowPct : 1) * this.speedMult(u);
     const step = speed * dt;
     const t = u.target;
     if (t) {
       const gap = dist(u, t) - t.radius - u.radius;
       if (gap <= d.range) {
         if (u.cd <= 0) {
-          u.cd = d.cooldown;
+          u.cd = d.cooldown / this.attackSpeedMult(u);
           const dmg = d.dmg * u.mult * (d.dive && u.attacks === 0 ? 2 : 1);
           u.attacks++;
+          // Pollen Cloud: 40% of attacks miss
+          if (this.zones.length && this.inEnemyZone(u, 'pollen') && this.rng.next() < 0.4) return;
           this.attack(u.team, u.owner, u.x, u.y, t, dmg, d.attack, {
             splash: d.splash, chain: d.chain, hitsAir: !!d.hitsAir, hitsGround: d.hitsGround ?? true,
             slow: d.slowOnHit, curse: d.curse,
@@ -519,10 +667,27 @@ export class World {
     }
   }
 
+  private speedMult(u: Unit) {
+    let m = 1;
+    if (this.buffs.length) {
+      if (this.hasBuff(u.team, 'rally')) m *= 1.25;
+      if (u.flying && this.hasBuff(u.team, 'tailwind')) m *= 1.4;
+    }
+    return m;
+  }
+
+  private attackSpeedMult(u: Unit) {
+    let m = 1;
+    if (this.buffs.length) {
+      if (this.hasBuff(u.team, 'rally')) m *= 1.25;
+    }
+    return m;
+  }
+
   /** Support unit: heal the most-hurt ally nearby, otherwise tag along behind the army. */
   private updateHealer(u: Unit, dt: number) {
     const d = u.def;
-    const step = d.speed * (u.slowT > 0 ? 1 - u.slowPct : 1) * (u.rootT > 0 ? 0 : 1) * dt;
+    const step = d.speed * (u.slowT > 0 ? 1 - u.slowPct : 1) * (u.rootT > 0 ? 0 : 1) * this.speedMult(u) * dt;
     let best: Unit | null = null;
     let bf = 0.999;
     for (const a of this.units) {
@@ -667,12 +832,13 @@ export class World {
   }
 
   /** Returns damage actually dealt. */
-  private hurt(e: Entity, base: number, attack: AttackType, owner: number): number {
+  private hurt(e: Entity, base: number, attack: AttackType, owner: number, ignoreArmor = false): number {
     if (!e.alive) return 0;
-    let amt = base * DAMAGE[attack][e.armor] * this.overtimeMult();
+    let amt = base * (ignoreArmor ? 1 : DAMAGE[attack][e.armor]) * this.overtimeMult();
     if (e.kind === 'unit') {
       const u = e as Unit;
       if (u.curseT > 0) amt *= u.curseMult;
+      if (this.buffs.length && this.hasBuff(u.team, 'plating')) amt *= 0.7;
       u.lastHurt = this.time;
     }
     const dealt = Math.min(amt, e.hp);
@@ -714,7 +880,9 @@ export class World {
     }
     // Choir Echo
     if (u.echo || FACTIONS[this.players[u.owner].faction].mechanic !== 'echo') return;
-    if (!u.def.alwaysEcho && this.rng.next() >= ECHO_CHANCE) return;
+    const owner = this.players[u.owner];
+    if (owner.lament > 0) owner.lament--;
+    else if (!u.def.alwaysEcho && this.rng.next() >= ECHO_CHANCE) return;
     this.pendingEchoes.push({
       ...u, id: this.nextId++, alive: true, hp: u.maxHp * ECHO_HP, echo: true, life: ECHO_LIFE,
       target: null, retarget: 0, cd: 0.5, slowT: 0, rootT: 0, stunT: 0, curseT: 0, attacks: 1,

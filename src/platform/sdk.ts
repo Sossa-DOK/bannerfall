@@ -8,6 +8,7 @@ interface CgSdk {
   init(): Promise<void>;
   environment: 'local' | 'crazygames' | 'disabled';
   game: { gameplayStart(): void; gameplayStop(): void; happytime(): void };
+  user?: { systemInfo?: { device?: { type?: 'desktop' | 'tablet' | 'mobile' } } };
 }
 
 let sdk: CgSdk | null = null;
@@ -22,6 +23,10 @@ export const platform = {
     } catch (e) {
       console.warn('CrazyGames SDK init failed', e);
     }
+  },
+  /** 'mobile' | 'tablet' | 'desktop' from the SDK when available (CrazyGames asks games to use this, not touch sniffing). */
+  deviceType(): string | null {
+    return sdk?.user?.systemInfo?.device?.type ?? null;
   },
   gameplayStart() {
     sdk?.game.gameplayStart();

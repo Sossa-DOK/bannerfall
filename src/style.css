@@ -3,8 +3,13 @@ html, body {
   margin: 0; height: 100%; background: #0b1020; overflow: hidden;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #eef2ff;
   -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
-  touch-action: manipulation;
+  touch-action: none; /* no pinch-zoom / double-tap zoom / pull-to-refresh on the game */
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
+#safe { position: fixed; pointer-events: none; visibility: hidden;
+  top: env(safe-area-inset-top, 0px); right: env(safe-area-inset-right, 0px); bottom: env(safe-area-inset-bottom, 0px); left: env(safe-area-inset-left, 0px); }
+.panel, .legend-panel { touch-action: pan-y; }
 /* Fixed 1280x720 logical stage, scaled to fit (CrazyGames iframe is 16:9). */
 #stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; }
 #game { position: absolute; inset: 0; width: 1280px; height: 720px; display: block; }
@@ -78,7 +83,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ltabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .ltabs button { background: #1c2747; border: 1px solid #34436e; border-radius: 6px; padding: 2px 10px; font-size: 12px; }
 .ltabs button.sel { border-color: #ffd84a; background: #2a3966; }
-.primary { margin-top: 16px; background: #e0a83a; color: #1a1205; border: 0; border-radius: 10px; padding: 10px 28px; font-size: 18px; font-weight: 700; }
+.primary { margin-top: 12px; background: #e0a83a; color: #1a1205; border: 0; border-radius: 10px; padding: 10px 28px; font-size: 18px; font-weight: 700; }
 #to-menu { margin-left: 8px; background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 10px 18px; }
 .help { font-size: 12px; line-height: 1.45; margin: 14px 0 0; }
 
@@ -118,3 +123,82 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 .pm-row { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
 .pm-row button { background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 8px 12px; }
 #pm-exit { border-color: #8a4a4a; }
+
+.cardpick { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.cardpick button { background: #1c2747; border: 2px solid #34436e; border-radius: 8px; padding: 4px 9px; font-size: 12px; max-width: 150px; }
+.cardpick button.sel { border-color: #ffd84a; background: #2a3966; }
+.cardpick button .any { color: #9fb0d0; font-size: 10px; display: block; }
+#actionbar { top: 552px; left: 50%; right: auto; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; }
+#cardbar { display: flex; gap: 6px; }
+#cancel-btn { pointer-events: auto; background: #5a1f24; border: 1px solid #c9686e; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+#cancel-btn.hidden { display: none; }
+#card-desc { font-size: 12px; min-height: 16px; margin-top: 4px; }
+#rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0b1020; color: #eef2ff; font-size: 22px; text-align: center;
+  align-items: center; justify-content: center; line-height: 1.6; }
+@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+
+/* ---------- compact layout: phones and small iframes (stage scaled below ~80%) ----------
+   The stage is 1280x720 logical px scaled to fit, so these sizes are logical px. */
+.compact #topbar { height: 52px; font-size: 21px; }
+.compact .gold b { font-size: 28px; }
+.compact #income { font-size: 16px; }
+.compact .core .bar { width: 110px; height: 12px; }
+.compact .core b { display: none; }
+.compact .core { font-size: 17px; }
+.compact #speed button, .compact #pause-btn, .compact #legend-btn { font-size: 18px; padding: 8px 12px; }
+.compact #bottombar { height: 124px; }
+.compact .bbtn { width: 102px; height: 96px; gap: 2px; }
+.compact .bbtn .nm { display: none; }
+.compact .bbtn .icon { width: 50px; height: 38px; margin-top: 6px; }
+.compact .bbtn .cost { font-size: 21px; }
+.compact .bbtn .hk, .compact .bbtn .tier { font-size: 14px; }
+.compact .bbtn .lock { font-size: 22px; }
+.compact #mechanic { display: none; }
+.compact #ability-btn { font-size: 17px; padding: 6px 12px; }
+.compact #sel-panel { font-size: 16px; padding: 6px 10px; }
+.compact #sel-title { font-size: 19px; }
+.compact #sel-info { line-height: 1.25; max-height: 40px; overflow: hidden; }
+.compact #sel-actions button { font-size: 17px; padding: 8px 12px; }
+.compact #actionbar { top: 538px; }
+.compact #cardbar button { font-size: 16px; min-width: 150px; padding: 4px 8px; }
+.compact #cardbar button .ic { font-size: 24px; }
+.compact #cardbar button .st { font-size: 14px; }
+.compact #cardbar button .k { display: none; }
+.compact #cancel-btn { font-size: 19px; padding: 12px 16px; }
+.compact #scout { top: 56px; font-size: 18px; }
+.compact #toast { top: 84px; font-size: 21px; }
+.compact #tutorial { top: 56px; width: 720px; font-size: 19px; }
+.compact #tutorial .tut-step { font-size: 14px; }
+.compact #tutorial button { font-size: 18px; padding: 8px 16px; }
+.compact .panel { max-height: 708px; overflow-y: auto; padding: 12px 22px; }
+.compact .panel h1 { font-size: 30px; }
+.compact .panel h3 { font-size: 16px; margin: 8px 0 4px; }
+.compact .choices button { font-size: 18px; padding: 8px 14px; }
+.compact .choices .fac { padding: 8px; }
+.compact .choices .fac span { font-size: 14px; }
+.compact .cardpick button { font-size: 16px; max-width: 170px; padding: 6px 10px; }
+.compact #card-desc { font-size: 15px; }
+.compact .help { display: none; }
+.compact .primary { font-size: 22px; padding: 12px 32px; }
+.compact #menu-legend, .compact #tutorial-btn, .compact #to-menu, .compact .pm-row button { font-size: 18px; padding: 12px 18px; }
+.compact .legend-panel { font-size: 15px; }
+.compact .lrow { font-size: 15px; }
+.compact .legend-close, .compact .ltabs button { font-size: 17px; padding: 6px 12px; }
+/* touch: hotkey hints are useless */
+.touch .bbtn .hk, .touch #cardbar button .k { display: none; }
+#cardbar button { pointer-events: auto; display: flex; align-items: center; gap: 5px; background: #2a2148ee; border: 1px solid #7a68c9;
+  border-radius: 8px; padding: 3px 8px; font-size: 12px; min-width: 128px; }
+#cardbar button .k { font-size: 10px; color: #c9b8ff; border: 1px solid #7a68c9; border-radius: 3px; padding: 0 3px; }
+#cardbar button .ic { font-size: 16px; }
+#cardbar button .st { font-size: 10px; color: #9fb0d0; display: block; }
+#cardbar button.aiming { border-color: #ffd84a; background: #4a3a10; }
+#cardbar button.used { opacity: 0.35; }
+#cardbar button.locked { opacity: 0.6; }
+#card-count { text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* compact menu: keep it within one screen */
+.compact .panel > p.muted:first-of-type { display: none; }
+.compact .choices .fac span { display: none; }
+.compact .choices .fac { width: 180px; text-align: center; }
+.compact .choices .fac b { font-size: 19px; }
+.compact .cardpick button .any { display: none; }
+.compact .panel h1 { margin-bottom: 0; }

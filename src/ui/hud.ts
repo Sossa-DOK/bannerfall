@@ -1,4 +1,5 @@
 import { cap, strongVs, weakVs } from '../data/damage';
+import { CARD_UNLOCK, getCard } from '../data/cards';
 import { FACTIONS } from '../data/factions';
 import { drawBuildingIcon } from '../render/shapes';
 import type { BuildingDef } from '../data/types';
@@ -9,6 +10,7 @@ export interface HudHandlers {
   upgrade(): void;
   overclock(): void;
   ability(): void;
+  card(idx: number): void;
   setSpeed(n: number): void;
   togglePause(): void;
 }
@@ -47,7 +49,24 @@ export class Hud {
     $('#ability-btn', root).addEventListener('click', () => this.h.ability());
   }
 
+  private cardButtons: HTMLButtonElement[] = [];
+
+  private setupCards(w: World, humanId: number) {
+    const bar = $('#cardbar', this.root);
+    bar.innerHTML = '';
+    this.cardButtons = w.players[humanId].cards.map((slot, i) => {
+      const c = getCard(slot.id);
+      const b = document.createElement('button');
+      b.title = `${c.name}: ${c.desc}`;
+      b.innerHTML = `<span class="k">${'QWE'[i]}</span><span class="ic">${c.icon}</span><span><b>${c.name}</b><span class="st"></span></span>`;
+      b.addEventListener('click', () => this.h.card(i));
+      bar.appendChild(b);
+      return b;
+    });
+  }
+
   setup(w: World, humanId: number) {
+    this.setupCards(w, humanId);
     const fac = FACTIONS[w.players[humanId].faction];
     const bar = $('#build-buttons', this.root);
     bar.innerHTML = '';
@@ -71,9 +90,9 @@ export class Hud {
     this.last = '';
   }
 
-  update(w: World, humanId: number, buildDef: BuildingDef | null, sel: Building | null, speed: number, paused: boolean) {
+  update(w: World, humanId: number, buildDef: BuildingDef | null, sel: Building | null, speed: number, paused: boolean, aiming: number | null = null) {
     const p = w.players[humanId];
-    const key = [Math.floor(p.gold), Math.floor(w.time * 4), buildDef?.id, sel?.id, sel?.rank, Math.round(sel?.hp ?? 0), speed, paused].join('|');
+    const key = [Math.floor(p.gold), Math.floor(w.time * 4), buildDef?.id, sel?.id, sel?.rank, Math.round(sel?.hp ?? 0), speed, paused, aiming, p.cards.map((c) => +c.used).join('')].join('|');
     if (key === this.last) return;
     this.last = key;
 
@@ -102,6 +121,21 @@ export class Hud {
 
     this.root.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) => b.classList.toggle('active', Number(b.dataset.speed) === speed));
     $('#pause-btn', this.root).textContent = paused ? '▶ Resume' : '❚❚ Pause';
+    p.cards.forEach((slot, i) => {
+      const b = this.cardButtons[i];
+      if (!b) return;
+      const locked = w.time < CARD_UNLOCK;
+      b.classList.toggle('used', slot.used);
+      b.classList.toggle('locked', !slot.used && locked);
+      b.classList.toggle('aiming', aiming === i);
+      b.querySelector('.st')!.textContent = slot.used
+        ? 'used'
+        : locked
+          ? `ready in ${Math.ceil(CARD_UNLOCK - w.time)}s`
+          : aiming === i
+            ? 'click to aim · Esc cancels'
+            : 'ready';
+    });
     if (FACTIONS[p.faction].mechanic === 'gale') {
       const ab = $<HTMLButtonElement>('#ability-btn', this.root);
       ab.disabled = !w.canGale(humanId);

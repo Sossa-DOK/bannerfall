@@ -13,6 +13,8 @@ Set in the **Shardlands**, a shattered world of floating islands. This is a gray
 | 🪶 **Galewing Aerie** | Fast, fragile, mostly flying | **Gale** (G): blows enemy ground units back and slows them |
 | 🕯️ **Hollow Choir** | Arcane spirits, win long fights | **Echo** (passive): fallen units can rise again as temporary ghosts |
 
+Before each match you pick **3 Commander Cards**: one-shot powers usable once each from 1:00. Each faction has 3 of its own (for example Gearstorm, Pollen Cloud, Feather Storm, Funeral Bell), plus 2 that any faction can take (Rally Banner, Heartstone Pulse). Your picks are remembered per faction. Bots bring and play cards too.
+
 Every unit has an **attack type** (Pierce, Normal, Siege, Magic) and an **armor type** (Light, Heavy, Fortified, Arcane), and a damage table decides who beats whom. Press **L** in game for the full legend and suggested counters.
 
 ## Running it
@@ -45,12 +47,23 @@ On a first visit the game drops you straight into a short guided tutorial. You c
 | **U** | Upgrade the selected building |
 | **O** | Overclock (Union) |
 | **G** | Gale (Aerie) |
+| **Q / W / E** | Play Commander Card 1 / 2 / 3. Aimed cards: click the battlefield; Esc or right-click cancels |
 | **L** | Unit legend and counters |
 | **Space** / **P** | Pause |
 | **Esc** | Cancel, or open the pause menu (Resume, Restart, Exit to main menu) |
 | **Right-click** | Cancel |
 
 The top bar also has 1× / 2× / 4× game speed.
+
+### Touch (phones and tablets)
+
+Play in landscape; in portrait the game pauses and asks you to rotate.
+
+- **Build:** tap a building in the bottom bar, then tap a tile. The ghost and its range appear first; tap the **same tile again** to build.
+- **Cards:** tap a card to read what it does, then tap it again to play it. For cards that need aiming, tap a spot to preview the circle, then tap the same spot again to drop it.
+- **✕ Cancel** (above the bottom bar) backs out of placing, aiming or a selection. Every keyboard action has an on-screen button.
+
+On small screens (phones, or browser windows smaller than about 1024×576) the HUD switches to a **compact layout** with bigger text and buttons. The game also keeps clear of phone notches and the home bar.
 
 ## Balance tools
 
@@ -69,7 +82,7 @@ All unit and building stats live in [`src/data/factions.ts`](src/data/factions.t
 
 ```
 src/
-  data/       factions, units, buildings, damage table (pure data)
+  data/       factions, units, buildings, Commander Cards, damage table (pure data)
   sim/        deterministic game simulation at 20 ticks/s: no rendering, seeded RNG
   ai/         build-order bots (counter-picking, Easy / Normal / Hard)
   game/       Match: wires the world and its bots together
@@ -90,6 +103,4 @@ The simulation is kept separate from rendering and is **deterministic**: the sam
   - ads
   - saving through the CrazyGames Data Module (the "tutorial done" flag is in `localStorage` for now)
   - the SDK's mute setting
-  - mobile touch layout
-  - Commander Cards
   - real art and audio

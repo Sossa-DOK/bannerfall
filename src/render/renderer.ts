@@ -1,6 +1,7 @@
 import { FACTIONS } from '../data/factions';
 import type { BuildingDef } from '../data/types';
 import * as L from '../sim/layout';
+import { getCard } from '../data/cards';
 import { ATTACK_COLORS, drawBuildingIcon, drawUnitShape } from './shapes';
 import { BLOOM_TIME, MAX_RANK, type Building, type SimEvent, type World } from '../sim/world';
 
@@ -26,6 +27,8 @@ export interface ViewState {
   selected: Building | null;
   /** tutorial: pulse an outline around this area */
   highlight?: { x: number; y: number; w: number; h: number } | null;
+  /** Commander Card aiming preview */
+  aim?: { x: number; y: number; r: number; valid: boolean } | null;
 }
 
 /** Gray-box renderer: reads the world, never changes it. */
@@ -33,6 +36,8 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private fx: Fx[] = [];
   private scale = 1;
+  private buffRing: (string | null)[] = [null, null];
+  private tailwind = [false, false];
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -71,6 +76,12 @@ export class Renderer {
         case 'rank':
           this.fx.push({ kind: 'rank', t0: now, life: 1.0, x: e.x, y: e.y - 22, color: e.bloom ? '#9be36b' : '#ffffff', text: e.bloom ? 'Bloom!' : 'Rank up' });
           break;
+        case 'card': {
+          const card = getCard(e.card);
+          this.fx.push({ kind: 'root', t0: now, life: 0.8, x: e.x, y: e.y, r: Math.max(30, e.r), color: '#ffd84a' });
+          this.fx.push({ kind: 'text', t0: now, life: 1.4, x: e.x, y: e.y - Math.max(30, e.r) - 6, color: '#ffe9a8', text: `${card.icon} ${card.name}` });
+          break;
+        }
         case 'gale':
           this.fx.push({ kind: 'gale', t0: now, life: 0.8, x: e.team === 0 ? 1 : -1, y: 0, color: '#e8fbff' });
           break;
@@ -96,6 +107,7 @@ export class Renderer {
     this.drawBackground(w, v);
     for (const b of w.buildings) this.drawBuilding(w, b, v, now);
     this.drawPlacement(w, v);
+    this.drawZones(w, now);
     if (v.highlight) {
       const h = v.highlight;
       c.strokeStyle = `rgba(255, 216, 74, ${0.55 + 0.45 * Math.sin(now * 6)})`;
@@ -104,9 +116,22 @@ export class Renderer {
     }
     for (const core of w.cores) this.drawCore(core.team, core.x, core.y, core.hp / core.maxHp, core.alive);
     // ground first, then flyers on top
+    this.buffRing = [0, 1].map((t) => (w.hasBuff(t, 'plating') ? '#d0d8e8' : w.hasBuff(t, 'rally') ? '#ffd84a' : null));
+    this.tailwind = [0, 1].map((t) => w.hasBuff(t, 'tailwind'));
     for (const u of w.units) if (!u.flying) this.drawUnit(u, now);
     for (const u of w.units) if (u.flying) this.drawUnit(u, now);
     this.drawFx(now);
+    if (v.aim) {
+      c.strokeStyle = v.aim.valid ? '#ffd84a' : '#ff5a5a';
+      c.fillStyle = v.aim.valid ? 'rgba(255,216,74,0.15)' : 'rgba(255,90,90,0.15)';
+      c.lineWidth = 2;
+      c.setLineDash([6, 4]);
+      c.beginPath();
+      c.arc(v.aim.x, v.aim.y, v.aim.r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.setLineDash([]);
+    }
   }
 
   private drawBackground(w: World, v: ViewState) {
@@ -276,6 +301,20 @@ export class Renderer {
     c.stroke();
   }
 
+  private drawZones(w: World, now: number) {
+    const c = this.ctx;
+    for (const z of w.zones) {
+      const pulse = 0.85 + 0.15 * Math.sin(now * 8);
+      c.fillStyle = z.kind === 'pollen' ? 'rgba(255, 224, 102, 0.18)' : 'rgba(240, 250, 255, 0.2)';
+      c.strokeStyle = z.kind === 'pollen' ? 'rgba(255, 224, 102, 0.7)' : 'rgba(240, 250, 255, 0.8)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(z.x, z.y, z.r * pulse, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+  }
+
   private drawUnit(u: World['units'][number], now: number) {
     const c = this.ctx;
     const r = u.radius;
@@ -297,6 +336,21 @@ export class Renderer {
       c.beginPath();
       c.arc(u.x, y, r + 4, 0, Math.PI * 2);
       c.stroke();
+    }
+    const ring = this.buffRing[u.team];
+    if (ring) {
+      c.strokeStyle = ring;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(u.x, y, r + 3, 0, Math.PI * 2);
+      c.stroke();
+    }
+    if (u.flying && this.tailwind[u.team]) {
+      c.strokeStyle = 'rgba(232,251,255,0.8)';
+      c.lineWidth = 1.5;
+      const back = u.team === 0 ? -1 : 1;
+      line(c, u.x + back * (r + 3), y - 3, u.x + back * (r + 12), y - 3);
+      line(c, u.x + back * (r + 3), y + 3, u.x + back * (r + 10), y + 3);
     }
     if (u.curseT > 0) {
       c.fillStyle = '#ff6ad5';

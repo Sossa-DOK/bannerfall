@@ -2,10 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Bannerfall — gray-box prototype</title>
   </head>
   <body>
+    <!-- area inside phone notches / home bar; the stage is fitted into this -->
+    <div id="safe"></div>
     <div id="stage">
       <canvas id="game"></canvas>
 
@@ -37,6 +39,7 @@
       </div>
 
       <div id="scout" class="hud"></div>
+      <div id="actionbar" class="hud"><div id="cardbar"></div><button id="cancel-btn" class="hidden">✕ Cancel</button></div>
       <div id="toast" class="hud"></div>
 
       <div id="menu" class="overlay">
@@ -62,12 +65,15 @@
           <div class="choices small" data-group="difficulty">
             <button data-value="easy">Easy</button><button data-value="normal">Normal</button><button data-value="hard">Hard</button>
           </div>
+          <h3>Commander Cards <span id="card-count" class="muted"></span></h3>
+          <div id="card-pick" class="cardpick"></div>
+          <div id="card-desc" class="muted"></div>
           <button id="start" class="primary">Start match</button>
           <button id="menu-legend">📖 Units &amp; counters</button>
           <button id="tutorial-btn">🎓 Tutorial</button>
           <p class="help muted">
             Build barracks on your grid: they spawn units that march down the bridge on their own. Towers defend your side.
-            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>G</b> gale · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
+            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>G</b> gale · <b>Q W E</b> cards · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
           </p>
         </div>
       </div>
@@ -95,5 +101,6 @@
       </div>
     </div>
     <script type="module" src="./src/main.ts"></script>
+    <div id="rotate"><div>📱↻<br />Rotate your device to landscape</div></div>
   </body>
 </html>

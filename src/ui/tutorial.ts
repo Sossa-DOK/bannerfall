@@ -141,6 +141,11 @@ export class Tutorial {
             button: 'Got it',
           },
       {
+        text: `<b>Commander Cards</b> (bottom-left): you bring 3 one-shot powers into every match. Use them with <b>Q</b>, <b>W</b> and <b>E</b> from <b>1:00</b>. Some need aiming: click the battlefield to drop them. Pick your hand on the main menu.`,
+        glow: '#cardbar',
+        button: 'Got it',
+      },
+      {
         text: `Not sure what beats what? Press <b>L</b> (or the 📖 button) for the unit legend. Once the match is on, a <b>Scout</b> line top-left also tells you what to build against the enemy's army.`,
         glow: '#legend-btn',
         button: 'Got it',

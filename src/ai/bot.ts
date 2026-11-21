@@ -50,6 +50,7 @@ export class Bot {
     }
 
     if (fac.mechanic === 'gale' && w.canGale(p.id) && this.threatLevel() >= 6) w.gale(p.id);
+    this.playCards();
 
     if (!this.plan) this.plan = this.choose(mine);
     const plan = this.plan;
@@ -69,6 +70,82 @@ export class Bot {
       else if (w.upgrade(p.id, b.id)) this.plan = null;
       else if (w.time - plan.since > 18) this.plan = null;
     }
+  }
+
+  /** Simple, readable rules for when to play each Commander Card. */
+  private playCards() {
+    const w = this.w;
+    const p = w.players[this.pid];
+    const myUnits = w.units.filter((u) => u.team === p.team);
+    const enemyUnits = w.units.filter((u) => u.team !== p.team);
+    for (let i = 0; i < p.cards.length; i++) {
+      if (!w.canCast(p.id, i).ok) continue;
+      const id = p.cards[i].id;
+      const cluster = this.densestEnemy(90);
+      const fighting = cluster.n >= 6 && myUnits.length >= 8;
+      const core = w.cores[p.team];
+      let cast = false;
+      switch (id) {
+        case 'gearstorm':
+        case 'pollen':
+        case 'feather_storm':
+          if (cluster.n >= 7) cast = w.cast(p.id, i, cluster.x, cluster.y);
+          break;
+        case 'plating':
+        case 'rally':
+        case 'lament':
+          if (fighting) cast = w.cast(p.id, i);
+          break;
+        case 'tailwind':
+          if (fighting && myUnits.filter((u) => u.flying).length >= 5) cast = w.cast(p.id, i);
+          break;
+        case 'heart_pulse':
+          if (core.hp < core.maxHp * 0.55) cast = w.cast(p.id, i);
+          break;
+        case 'double_shift':
+          if (w.buildings.filter((b) => b.owner === p.id && b.def.kind === 'barracks').length >= 4) cast = w.cast(p.id, i);
+          break;
+        case 'overgrowth': {
+          const b = w.buildings
+            .filter((x) => x.owner === p.id && x.rank < MAX_RANK && x.def.kind === 'barracks')
+            .sort((a, b2) => b2.def.tier - a.def.tier)[0];
+          if (b && w.time > 150) cast = w.cast(p.id, i, b.x, b.y);
+          break;
+        }
+        case 'seedfall':
+          if (this.threatLevel() >= 8) {
+            const g = w.grid(p.id);
+            cast = w.cast(p.id, i, g.x + g.w / 2, L.LANE_Y);
+          }
+          break;
+        case 'second_gale':
+          if (p.abilityCd > 20 && this.threatLevel() >= 6) cast = w.cast(p.id, i);
+          break;
+        case 'funeral_bell': {
+          const towers = w.buildings.filter((b) => b.team !== p.team && b.def.tower);
+          const pushing = myUnits.filter((u) => towers.some((t) => Math.hypot(t.x - u.x, t.y - u.y) < 200)).length;
+          if (pushing >= 8) cast = w.cast(p.id, i);
+          break;
+        }
+        case 'soul_harvest':
+          if (enemyUnits.length >= 20) cast = w.cast(p.id, i);
+          break;
+      }
+      if (cast) return; // one card per think
+    }
+  }
+
+  /** Enemy unit with the most other enemies within r (a good place to drop an area card). */
+  private densestEnemy(r: number) {
+    const team = this.w.players[this.pid].team;
+    const es = this.w.units.filter((u) => u.team !== team);
+    let best = { x: 0, y: 0, n: 0 };
+    for (const a of es) {
+      let n = 0;
+      for (const b of es) if (Math.abs(a.x - b.x) < r && Math.hypot(a.x - b.x, a.y - b.y) < r) n++;
+      if (n > best.n) best = { x: a.x, y: a.y, n };
+    }
+    return best;
   }
 
   private threatLevel() {

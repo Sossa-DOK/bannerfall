@@ -2,7 +2,7 @@ import { DAMAGE } from '../data/damage';
 import { FACTIONS } from '../data/factions';
 import type { ArmorType, BuildingDef } from '../data/types';
 import * as L from '../sim/layout';
-import { MAX_RANK, type Building, type World } from '../sim/world';
+import { MAX_RANK, len2d, type Building, type World } from '../sim/world';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -125,7 +125,7 @@ export class Bot {
           break;
         case 'funeral_bell': {
           const towers = w.buildings.filter((b) => b.team !== p.team && b.def.tower);
-          const pushing = myUnits.filter((u) => towers.some((t) => Math.hypot(t.x - u.x, t.y - u.y) < 200)).length;
+          const pushing = myUnits.filter((u) => towers.some((t) => len2d(t.x - u.x, t.y - u.y) < 200)).length;
           if (pushing >= 8) cast = w.cast(p.id, i);
           break;
         }
@@ -144,7 +144,7 @@ export class Bot {
     let best = { x: 0, y: 0, n: 0 };
     for (const a of es) {
       let n = 0;
-      for (const b of es) if (Math.abs(a.x - b.x) < r && Math.hypot(a.x - b.x, a.y - b.y) < r) n++;
+      for (const b of es) if (Math.abs(a.x - b.x) < r && len2d(a.x - b.x, a.y - b.y) < r) n++;
       if (n > best.n) best = { x: a.x, y: a.y, n };
     }
     return best;

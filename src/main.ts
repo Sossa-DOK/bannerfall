@@ -3,7 +3,10 @@ import { Bot, type Difficulty } from './ai/bot';
 import type { BuildingDef, FactionId } from './data/types';
 import { CARD_UNLOCK, CARDS_PER_PLAYER, cardOptions, defaultCards, getCard } from './data/cards';
 import { FACTIONS } from './data/factions';
-import { Match, otherFaction, type MatchSetup, type Mode } from './game/match';
+import { applyCommand, type Command } from './game/commands';
+import { Match, otherFaction, type MatchSetup, type Mode, type OnlineSeats } from './game/match';
+import { Lockstep, type NetMsg } from './net/lockstep';
+import { NET_VERSION, NetLink } from './net/peer';
 import { audio } from './audio/audio';
 import { platform } from './platform/sdk';
 import { Renderer } from './render/renderer';
@@ -120,6 +123,7 @@ let toastT = 0;
 let scoutT = 0;
 let pausedBeforeLegend = false;
 let tutorial: Tutorial | null = null;
+let endShown = false;
 let currentIsTutorial = false;
 let legendOpened = false;
 
@@ -164,7 +168,7 @@ function toast(msg: string) {
   toastT = 2.2;
 }
 
-function startMatch(asTutorial = false, seedOverride?: number) {
+function startMatch(asTutorial = false, seedOverride?: number, onlineSeats?: OnlineSeats) {
   tutorial?.finish();
   tutorial = null;
   legendOpened = false;
@@ -174,6 +178,7 @@ function startMatch(asTutorial = false, seedOverride?: number) {
     mode: asTutorial ? '1v1' : choice.mode, playerFaction: choice.faction, enemyFaction: asTutorial ? (choice.faction === 'union' ? 'bloomkin' : 'union') : enemy,
     difficulty: asTutorial ? 'easy' : choice.difficulty,
     seed, human: true, playerCards: pickedCards.length === CARDS_PER_PLAYER ? pickedCards : loadCards(choice.faction),
+    online: onlineSeats,
   };
   matchCount++;
   currentIsTutorial = asTutorial;
@@ -184,13 +189,21 @@ function startMatch(asTutorial = false, seedOverride?: number) {
   paused = false;
   acc = 0;
   renderer.clearFx();
+  prevTime = 0;
+  prevCore = match.world.cores[match.world.players[match.humanId].team].hp;
   hud.setup(match.world, match.humanId);
   $('#menu').classList.add('hidden');
   $('#end').classList.add('hidden');
+  endShown = false;
+  const myFaction = match.world.players[match.humanId].faction;
   if (asTutorial) tutorial = new Tutorial(match, stage, () => (tutorial = null));
+  else if (onlineSeats)
+    toast(`Online match! You are ${FACTIONS[myFaction].name} on the ${onlineSeats.localSeat === 0 ? 'blue (left)' : 'red (right)'} side.`);
   else toast(`You are ${FACTIONS[choice.faction].name}. Press 1 and click a tile on your grid. Press L for the unit legend.`);
+  document.body.classList.toggle('online', !!onlineSeats);
+  if (onlineSeats) speed = 1;
   $('#scout').innerHTML = '';
-  audio.setMusic(choice.faction);
+  audio.setMusic(myFaction);
   audio.setDucked(false);
   audio.play('start');
   platform.gameplayStart();
@@ -205,6 +218,15 @@ function endMatch() {
   platform.gameplayStop();
   if (won) platform.happytime();
   $('#end-title').textContent = won ? 'Victory!' : 'Defeat';
+  if (online) {
+    rematch = { me: false, them: false };
+    $('#again').textContent = 'Rematch';
+    ($('#again') as HTMLButtonElement).disabled = false;
+    $('#to-menu').textContent = 'Leave';
+  } else {
+    $('#again').textContent = 'Next match';
+    $('#to-menu').textContent = 'Change setup';
+  }
   const me = w.players[match.humanId];
   $('#end-stats').textContent = `Match time ${Math.floor(w.time / 60)}:${String(Math.floor(w.time % 60)).padStart(2, '0')} · buildings placed ${me.built} · kills ${me.kills}`;
   $('#end').classList.remove('hidden');
@@ -213,18 +235,54 @@ function endMatch() {
 function setPaused(p: boolean) {
   if (!match || match.world.winner !== null) return;
   paused = p;
+  if (online) return; // online: the menu opens, but the match keeps running for both players
   audio.setDucked(paused);
   if (paused) platform.gameplayStop();
   else platform.gameplayStart();
 }
 
+/**
+ * Every player action goes through here. Offline it applies at once; online it is
+ * checked locally, then sent and applied on both machines on the same future tick.
+ */
+function act(c: Command): boolean {
+  if (!match) return false;
+  const w = match.world;
+  const me = match.humanId;
+  if (!online) return applyCommand(w, me, c);
+  let ok = false;
+  switch (c.k) {
+    case 'place':
+      ok = w.canPlace(me, c.def, c.col, c.row).ok;
+      break;
+    case 'upgrade': {
+      const b = w.buildings.find((x) => x.id === c.bid);
+      ok = !!b && w.canUpgrade(me, b);
+      break;
+    }
+    case 'overclock': {
+      const b = w.buildings.find((x) => x.id === c.bid);
+      ok = !!b && w.canOverclock(me, b);
+      break;
+    }
+    case 'gale':
+      ok = w.canGale(me);
+      break;
+    case 'cast':
+      ok = w.canCast(me, c.idx).ok && w.validCardTarget(me, c.idx, c.x, c.y);
+      break;
+  }
+  if (ok) online.ls.queue(c);
+  return ok;
+}
+
 function doUpgrade() {
   if (!match || !selected) return;
-  if (!match.world.upgrade(match.humanId, selected.id)) toast(selected.rank >= 3 ? 'Already max rank' : 'Not enough gold');
+  if (!act({ k: 'upgrade', bid: selected.id })) toast(selected.rank >= 3 ? 'Already max rank' : 'Not enough gold');
 }
 
 function useCard(i: number) {
-  if (!match || paused || match.world.winner !== null) return;
+  if (!match || (paused && !online) || match.world.winner !== null) return;
   const w = match.world;
   const slot = w.players[match.humanId].cards[i];
   if (!slot) return;
@@ -247,7 +305,7 @@ function useCard(i: number) {
       return;
     }
     armedCard = null;
-    w.cast(match.humanId, i);
+    act({ k: 'cast', idx: i, x: 0, y: 0 });
     return;
   }
   aiming = i;
@@ -259,8 +317,8 @@ function useCard(i: number) {
 }
 
 function doAbility() {
-  if (!match || paused) return;
-  if (!match.world.gale(match.humanId)) {
+  if (!match || (paused && !online)) return;
+  if (!act({ k: 'gale' })) {
     const p = match.world.players[match.humanId];
     if (FACTIONS[p.faction].mechanic === 'gale') toast(`Gale recharging (${Math.ceil(p.abilityCd)}s)`);
   }
@@ -268,14 +326,21 @@ function doAbility() {
 
 function doOverclock() {
   if (!match || !selected) return;
-  if (!match.world.overclock(match.humanId, selected.id)) toast('Overclock not ready');
+  if (!act({ k: 'overclock', bid: selected.id })) toast('Overclock not ready');
 }
 
 $('#start').addEventListener('click', () => startMatch());
 $('#tutorial-btn').addEventListener('click', () => startMatch(true));
 $('#menu-legend').addEventListener('click', toggleLegend);
 $('#legend-btn').addEventListener('click', toggleLegend);
-$('#again').addEventListener('click', () => startMatch());
+$('#again').addEventListener('click', () => {
+  if (!online) return startMatch();
+  rematch.me = true;
+  online.link.send({ t: 'rematch' });
+  ($('#again') as HTMLButtonElement).disabled = true;
+  $('#again').textContent = rematch.them ? 'Starting…' : 'Waiting for opponent…';
+  maybeStartRematch();
+});
 $('#to-menu').addEventListener('click', () => exitToMenu());
 $('#pm-resume').addEventListener('click', () => setPaused(false));
 $('#pm-legend').addEventListener('click', toggleLegend);
@@ -283,6 +348,7 @@ $('#pm-restart').addEventListener('click', () => startMatch(currentIsTutorial));
 $('#pm-exit').addEventListener('click', () => exitToMenu());
 
 function exitToMenu() {
+  leaveOnline();
   audio.setMusic('menu');
   audio.setDucked(false);
   tutorial?.finish();
@@ -356,7 +422,7 @@ canvas.addEventListener('pointerdown', (e) => {
         toast('Tap the same spot again to drop it · ✕ Cancel to stop');
         return;
       }
-      w.cast(match.humanId, aiming, p.x, p.y);
+      act({ k: 'cast', idx: aiming, x: p.x, y: p.y });
       aiming = null;
       clearPending();
     } else {
@@ -375,7 +441,7 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (res.ok) {
       pendingTile = null;
-      w.place(match.humanId, buildDef.id, t.col, t.row);
+      act({ k: 'place', def: buildDef.id, col: t.col, row: t.row });
       audio.play('build', p.x);
       if (!e.shiftKey) buildDef = null; // shift-click to place several
     } else if (res.reason === 'Tile taken') {
@@ -393,6 +459,10 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement) {
+    if (e.key === 'Enter' && e.target.id === 'join-code') void joinGame();
+    return;
+  }
   if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
   if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
   if (e.repeat) return;
@@ -486,33 +556,25 @@ function frame(nowMs: number) {
     const w = match.world;
     const portrait = window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches;
     $('#cancel-btn').classList.toggle('hidden', !(buildDef || aiming !== null || selected));
-    if (!paused && !portrait && w.winner === null) {
+    if (!online && !paused && !portrait && w.winner === null) {
       acc += dt * speed;
       let steps = 0;
       while (acc >= TICK && steps < 40) {
-        const before = w.time;
-        const coreBefore = w.cores[w.players[match.humanId].team].hp;
         match.step();
-        renderer.ingest(w.events, match.humanId, now);
-        for (const ev of w.events) audio.event(ev, match.humanId);
-        if (w.cores[w.players[match.humanId].team].hp < coreBefore - 1) audio.play('alarm');
-        for (const [at, msg] of TIMED_ANNOUNCEMENTS)
-          if (before < at && w.time >= at) {
-            audio.play('tier');
-            toast(msg);
-          }
-        for (const ev of w.events)
-          if (ev.type === 'card' && ev.owner !== match.humanId) {
-            const c = getCard(ev.card);
-            toast(`${w.players[ev.owner].name} played ${c.icon} ${c.name}`);
-          }
+        afterTick(now);
         acc -= TICK;
         steps++;
-        if (w.winner !== null) {
-          endMatch();
-          break;
-        }
+        if (w.winner !== null) break;
       }
+    }
+    if (online) {
+      tickNow = now;
+      if (!portrait) online.ls.update(dt);
+      updateNetStatus();
+    }
+    if (w.winner !== null && !endShown) {
+      endShown = true;
+      endMatch();
     }
     if (selected && !selected.alive) selected = null;
     $('#pause-menu').classList.toggle('hidden', !(paused && !legend.open && w.winner === null));
@@ -547,6 +609,251 @@ function frame(nowMs: number) {
 
 const newIdle = () => new Match({ mode: '2v2', playerFaction: 'union', enemyFaction: 'bloomkin', difficulty: 'normal', seed: (Math.random() * 1e9) >>> 0, human: false });
 let idleWorld = newIdle();
+
+// ---------- online 1v1 (peer-to-peer lockstep) ----------
+type StartMsg = { t: 'start'; v: string; seed: number; host: OnlineSeats['host']; guest: OnlineSeats['guest'] };
+let online: { link: NetLink; ls: Lockstep; seat: 0 | 1; guestSetup?: OnlineSeats['guest'] } | null = null;
+let rematch = { me: false, them: false };
+let lobbyAbort: AbortController | null = null;
+
+/** Never trust a peer's card list blindly: fall back to defaults if anything is off. */
+function cleanSeat(f: unknown, cards: unknown): OnlineSeats['host'] {
+  const faction = (FACTIONS as Record<string, unknown>)[f as string] ? (f as FactionId) : 'union';
+  const valid = new Set(cardOptions(faction).map((c) => c.id));
+  const list = Array.isArray(cards) ? cards.filter((c): c is string => typeof c === 'string' && valid.has(c)) : [];
+  return { faction, cards: list.length === CARDS_PER_PLAYER && new Set(list).size === list.length ? list : defaultCards(faction) };
+}
+
+function lobbyStatus(msg: string, error = false) {
+  $('#online-status').textContent = msg;
+  $('#online-status').classList.toggle('error', error);
+}
+
+function openLobby() {
+  $('#online').classList.remove('hidden');
+  $('#host-code').classList.add('hidden');
+  lobbyStatus(`You'll play as ${FACTIONS[choice.faction].name} with your picked Commander Cards.`);
+}
+
+function closeLobby() {
+  lobbyAbort?.abort();
+  lobbyAbort = null;
+  $('#online').classList.add('hidden');
+}
+
+async function hostGame() {
+  lobbyAbort?.abort();
+  lobbyAbort = new AbortController();
+  lobbyStatus('Creating a room…');
+  try {
+    const link = await NetLink.host((code) => {
+      $('#code-text').textContent = code;
+      $('#host-code').classList.remove('hidden');
+      lobbyStatus('Waiting for your friend to join…');
+    }, lobbyAbort.signal);
+    lobbyStatus('Friend connected! Starting…');
+    link.onMessage = (msg) => {
+      if (msg?.t !== 'hello') return;
+      if (msg.v !== NET_VERSION) {
+        link.send({ t: 'error', msg: 'Different game versions — both players need to refresh the page.' });
+        lobbyStatus('Your friend is on a different version of the game. Both refresh and try again.', true);
+        link.close();
+        return;
+      }
+      const guest = cleanSeat(msg.faction, msg.cards);
+      const start: StartMsg = { t: 'start', v: NET_VERSION, seed: (Math.random() * 2 ** 31) >>> 0, host: { faction: choice.faction, cards: currentCards() }, guest };
+      link.send(start);
+      beginOnline(link, 0, start, guest);
+    };
+    link.onClose = (r) => lobbyStatus(r, true);
+  } catch (e) {
+    if ((e as Error).message !== 'cancelled') lobbyStatus((e as Error).message, true);
+  }
+}
+
+async function joinGame() {
+  const code = ($('#join-code') as HTMLInputElement).value.trim().toUpperCase();
+  if (code.length < 5) {
+    lobbyStatus('Enter the 5-letter room code your friend sent you.', true);
+    return;
+  }
+  lobbyAbort?.abort();
+  lobbyAbort = new AbortController();
+  lobbyStatus(`Joining ${code}…`);
+  try {
+    const link = await NetLink.join(code, lobbyAbort.signal);
+    lobbyStatus('Connected! Waiting for the host…');
+    link.onMessage = (msg) => {
+      if (msg?.t === 'error') lobbyStatus(msg.msg, true);
+      if (msg?.t !== 'start') return;
+      if (msg.v !== NET_VERSION) {
+        lobbyStatus('Different game versions — both players need to refresh the page.', true);
+        link.close();
+        return;
+      }
+      beginOnline(link, 1, msg as StartMsg);
+    };
+    link.onClose = (r) => lobbyStatus(r, true);
+    link.send({ t: 'hello', v: NET_VERSION, faction: choice.faction, cards: currentCards() });
+  } catch (e) {
+    if ((e as Error).message !== 'cancelled') lobbyStatus((e as Error).message, true);
+  }
+}
+
+function currentCards() {
+  return pickedCards.length === CARDS_PER_PLAYER ? pickedCards : loadCards(choice.faction);
+}
+
+function beginOnline(link: NetLink, seat: 0 | 1, start: StartMsg, guestSetup?: OnlineSeats['guest']) {
+  lobbyAbort = null;
+  $('#online').classList.add('hidden');
+  const host = cleanSeat(start.host.faction, start.host.cards);
+  const guest = cleanSeat(start.guest.faction, start.guest.cards);
+  startMatch(false, start.seed, { localSeat: seat, host, guest });
+  const m = match!;
+  const ls = new Lockstep(m, link, seat, () => afterTick(tickNow));
+  online = { link, ls, seat, guestSetup: guestSetup ?? online?.guestSetup };
+  rematch = { me: false, them: false };
+  link.onMessage = (msg: NetMsg | { t: string; [k: string]: unknown }) => {
+    switch (msg.t) {
+      case 'bye':
+        opponentLeft('Your opponent left the match.');
+        break;
+      case 'rematch':
+        rematch.them = true;
+        if (rematch.me) $('#again').textContent = 'Starting…';
+        else toast('Your opponent wants a rematch!');
+        maybeStartRematch();
+        break;
+      case 'start':
+        if (online?.seat === 1) beginOnline(link, 1, msg as StartMsg);
+        break;
+      default:
+        online?.ls.receive(msg as NetMsg);
+    }
+  };
+  link.onClose = (reason) => opponentLeft(reason === 'Opponent disconnected' ? 'Your opponent disconnected.' : reason);
+}
+
+/** The host starts the rematch once both players have asked for one. */
+function maybeStartRematch() {
+  if (!online || online.seat !== 0 || !rematch.me || !rematch.them || !match) return;
+  const w = match.world;
+  const start: StartMsg = {
+    t: 'start', v: NET_VERSION, seed: (Math.random() * 2 ** 31) >>> 0,
+    host: { faction: w.players[0].faction, cards: w.players[0].cards.map((c) => c.id) },
+    guest: { faction: w.players[1].faction, cards: w.players[1].cards.map((c) => c.id) },
+  };
+  online.link.send(start);
+  beginOnline(online.link, 0, start);
+}
+
+function opponentLeft(msg: string) {
+  if (!online) return;
+  const stillPlaying = match && match.world.winner === null;
+  online = null;
+  document.body.classList.remove('online');
+  $('#net').textContent = '';
+  if (stillPlaying && match) {
+    endShown = true;
+    platform.gameplayStop();
+    audio.play('victory');
+    audio.setDucked(true);
+    $('#end-title').textContent = 'Opponent left';
+    $('#end-stats').textContent = msg;
+    $('#again').textContent = 'Play vs AI';
+    ($('#again') as HTMLButtonElement).disabled = false;
+    $('#to-menu').textContent = 'Main menu';
+    $('#pause-menu').classList.add('hidden');
+    $('#end').classList.remove('hidden');
+  } else {
+    toast(msg);
+    if (!$('#end').classList.contains('hidden')) {
+      ($('#again') as HTMLButtonElement).disabled = true;
+      $('#again').textContent = 'Opponent left';
+    }
+  }
+}
+
+function leaveOnline() {
+  if (!online) return;
+  online.link.close();
+  online = null;
+  document.body.classList.remove('online');
+  $('#net').textContent = '';
+}
+
+function updateNetStatus() {
+  if (!online) return;
+  const ls = online.ls;
+  if (ls.desync && match && !endShown) {
+    endShown = true;
+    $('#end-title').textContent = 'Out of sync';
+    $('#end-stats').textContent = `The two games drifted apart (${ls.desync}). Sorry! Please start a new match.`;
+    ($('#again') as HTMLButtonElement).disabled = true;
+    $('#to-menu').textContent = 'Leave';
+    $('#end').classList.remove('hidden');
+    return;
+  }
+  const rtt = ls.rtt ? ` · ${Math.round(ls.rtt)} ms` : '';
+  $('#net').textContent = ls.stalled > 0.6 ? '⏳ Waiting for opponent…' : `🌐 Online${rtt}`;
+  $('#net').classList.toggle('waiting', ls.stalled > 0.6);
+}
+
+$('#online-btn').addEventListener('click', openLobby);
+$('#online-cancel').addEventListener('click', closeLobby);
+$('#host-btn').addEventListener('click', hostGame);
+$('#join-btn').addEventListener('click', joinGame);
+$('#copy-code').addEventListener('click', () => {
+  void navigator.clipboard?.writeText($('#code-text').textContent ?? '').then(() => lobbyStatus('Code copied! Waiting for your friend to join…'));
+});
+($('#join-code') as HTMLInputElement).addEventListener('input', (e) => {
+  const el = e.target as HTMLInputElement;
+  el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+});
+window.addEventListener('beforeunload', () => online?.link.close());
+
+// Dev-only automated two-browser test (?nettest=host|join). Stripped from production builds.
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('nettest')) {
+  void import('./net/nettest').then((t) =>
+    t.runNetTest({
+      hostGame,
+      joinGame: (code: string) => {
+        ($('#join-code') as HTMLInputElement).value = code;
+        return joinGame();
+      },
+      act,
+      getMatch: () => match,
+      getOnline: () => online,
+    }),
+  );
+}
+
+// ---------- per-tick feedback (offline loop and online lockstep share this) ----------
+let tickNow = 0;
+let prevTime = 0;
+let prevCore = 0;
+function afterTick(now: number) {
+  if (!match) return;
+  const w = match.world;
+  const me = match.humanId;
+  renderer.ingest(w.events, me, now);
+  for (const ev of w.events) audio.event(ev, me);
+  const core = w.cores[w.players[me].team].hp;
+  if (core < prevCore - 1) audio.play('alarm');
+  for (const [at, msg] of TIMED_ANNOUNCEMENTS)
+    if (prevTime < at && w.time >= at) {
+      audio.play('tier');
+      toast(msg);
+    }
+  for (const ev of w.events)
+    if (ev.type === 'card' && ev.owner !== me) {
+      const c = getCard(ev.card);
+      toast(`${w.players[ev.owner].name} played ${c.icon} ${c.name}`);
+    }
+  prevTime = w.time;
+  prevCore = core;
+}
 
 // ---------- audio ----------
 const TIMED_ANNOUNCEMENTS: [number, string][] = [

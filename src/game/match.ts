@@ -17,6 +17,14 @@ export interface MatchSetup {
   human: boolean;
   /** the human's Commander Cards (bots pick their own) */
   playerCards?: string[];
+  /** Online 1v1: two humans, no bots. Seat 0 = host (blue, left), seat 1 = guest (red, right). */
+  online?: OnlineSeats;
+}
+
+export interface OnlineSeats {
+  localSeat: 0 | 1;
+  host: { faction: FactionId; cards: string[] };
+  guest: { faction: FactionId; cards: string[] };
 }
 
 /** Bots bring a random hand of cards (deterministic from the seed). */
@@ -41,6 +49,17 @@ export class Match {
   readonly humanId: number;
 
   constructor(readonly setup: MatchSetup) {
+    if (setup.online) {
+      const o = setup.online;
+      const players: PlayerConfig[] = [
+        { team: 0, slot: 0, faction: o.host.faction, isHuman: true, name: o.localSeat === 0 ? 'You' : 'Opponent', cards: o.host.cards },
+        { team: 1, slot: 0, faction: o.guest.faction, isHuman: true, name: o.localSeat === 1 ? 'You' : 'Opponent', cards: o.guest.cards },
+      ];
+      this.world = new World({ seed: setup.seed, players });
+      this.humanId = o.localSeat;
+      this.bots = [];
+      return;
+    }
     const enemyMult = INCOME_MULT[setup.difficulty];
     const players: PlayerConfig[] = [
       { team: 0, slot: 0, faction: setup.playerFaction, isHuman: setup.human, name: setup.human ? 'You' : 'Blue bot' },

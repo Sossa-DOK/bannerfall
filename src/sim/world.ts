@@ -29,6 +29,11 @@ const UNIT_CAP_PER_PLAYER = 55;
 export const OVERTIME_AT = 12 * 60;
 const CORE_TOWER: TowerDef = { dmg: 32, cooldown: 0.8, range: 210, attack: 'normal', hitsAir: true, splash: 30 };
 
+/** sqrt(dx²+dy²). Not Math.hypot: its result can differ between browsers, which would desync online play. */
+export function len2d(dx: number, dy: number) {
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 export const rankMult = (r: number) => 1 + 0.3 * (r - 1);
 
 export interface Entity {
@@ -715,7 +720,7 @@ export class World {
     for (const a of this.units) if (a !== u && a.alive && a.team === u.team && !a.def.heal && (!lead || a.x * dir > lead.x * dir)) lead = a;
     if (lead) {
       const tx = lead.x - dir * 40;
-      if (Math.hypot(tx - u.x, lead.y - u.y) > 10) moveToward(u, tx, lead.y, step);
+      if (len2d(tx - u.x, lead.y - u.y) > 10) moveToward(u, tx, lead.y, step);
     }
     void dt;
   }
@@ -768,7 +773,7 @@ export class World {
     let bestScore = Infinity;
     for (const e of this.enemies(team)) {
       if (!this.eligible(e, hitsAir, hitsGround)) continue;
-      const d = Math.hypot(e.x - x, e.y - y) - e.radius;
+      const d = len2d(e.x - x, e.y - y) - e.radius;
       if (d > range || d < minRange) continue;
       let score = d;
       if (e.kind !== 'unit') score += 40; // units engage units first
@@ -892,14 +897,14 @@ export class World {
 }
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return len2d(a.x - b.x, a.y - b.y);
 }
 
 function moveToward(u: { x: number; y: number }, tx: number, ty: number, step: number) {
   if (step <= 0) return;
   const dx = tx - u.x;
   const dy = ty - u.y;
-  const d = Math.hypot(dx, dy);
+  const d = len2d(dx, dy);
   if (d < 0.001) return;
   const s = Math.min(step, d);
   u.x += (dx / d) * s;

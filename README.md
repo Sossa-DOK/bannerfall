@@ -81,6 +81,19 @@ Screenshots use **screenshot mode**: open `/?shot&f=union&e=bloomkin&mode=1v1&t=
 
 The top bar also has 1× / 2× / 4× game speed.
 
+### Online 1v1
+
+**🌐 Online 1v1** on the main menu: one player clicks **Create game** and shares the 5-letter room code; the other types it under **Join**. Each player uses the faction and Commander Cards picked on the menu. Works anywhere the game is hosted, including itch.io — there is no game server.
+
+How it works: the two browsers connect directly over WebRTC (the free [PeerJS](https://peerjs.com) service only introduces them, and relays traffic if a direct path is blocked). The simulation is deterministic, so only player commands are sent (**lockstep**): each command runs on the same tick on both machines, ~300 ms after it's issued. State fingerprints are compared every 2 s to detect desyncs. Online matches can't be paused or sped up, and leaving counts as a forfeit.
+
+Tests:
+
+```sh
+npx tsx scripts/lockstep-test.ts 6   # two simulated peers over a fake laggy network
+python3 scripts/nettest.py 300        # two real headless Firefox browsers over PeerJS (needs dev server + internet)
+```
+
 ### Sound
 
 All sound effects and music are **synthesized in code** with the Web Audio API, so there are no audio files to download. Each faction has its own music loop, plus a calm menu theme. Toggle sound effects and music from the main menu or the pause menu; **M** or the 🔊 button mutes everything. Settings are remembered. When the CrazyGames SDK is loaded, its mute setting overrides these toggles.
@@ -119,6 +132,7 @@ src/
   render/     canvas renderer and unit silhouettes
   ui/         HUD, unit legend, scout hint, tutorial
   audio/      procedural sound effects and music (Web Audio)
+  net/        online 1v1: PeerJS link, deterministic lockstep
   platform/   CrazyGames SDK v3 wrapper (incl. muteAudio)
   main.ts     menus, input, game loop
 scripts/      headless balance and debugging scripts

@@ -16,7 +16,7 @@
           <span class="gold">⛁ <b id="gold">0</b></span>
           <span id="income" class="muted"></span>
         </div>
-        <div class="tb-mid"><b id="clock">0:00</b> <span id="tier" class="muted"></span></div>
+        <div class="tb-mid"><b id="clock">0:00</b> <span id="tier" class="muted"></span> <span id="net"></span></div>
         <div class="tb-right">
           <div class="core" id="core0"><span>Blue</span><div class="bar"><i></i></div><b></b></div>
           <div class="core red" id="core1"><span>Red</span><div class="bar"><i></i></div><b></b></div>
@@ -70,6 +70,7 @@
           <div id="card-pick" class="cardpick"></div>
           <div id="card-desc" class="muted"></div>
           <button id="start" class="primary">Start match</button>
+          <button id="online-btn" class="primary alt">🌐 Online 1v1</button>
           <button id="menu-legend">📖 Units &amp; counters</button>
           <button id="tutorial-btn">🎓 Tutorial</button>
           <button id="menu-sound" class="icon-toggle"></button>
@@ -95,6 +96,28 @@
             <button id="pm-music"></button>
           </div>
           <p class="muted help">Space, P or Esc to resume</p>
+        </div>
+      </div>
+
+      <div id="online" class="overlay hidden">
+        <div class="panel online-panel">
+          <h1>🌐 Online 1v1</h1>
+          <p class="muted">Play a friend over the internet. You'll use the faction and Commander Cards picked on the main menu.</p>
+          <div class="online-cols">
+            <div class="online-col">
+              <h3>Host</h3>
+              <button id="host-btn" class="primary">Create game</button>
+              <div id="host-code" class="hidden">Room code<div class="code"><b id="code-text"></b><button id="copy-code">Copy</button></div><span class="muted">Send it to your friend</span></div>
+            </div>
+            <div class="online-col">
+              <h3>Join</h3>
+              <input id="join-code" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+              <button id="join-btn" class="primary">Join</button>
+            </div>
+          </div>
+          <p id="online-status" class="muted"></p>
+          <button id="online-cancel">Back</button>
+          <p class="muted fineprint">Connects browser-to-browser (WebRTC). The free PeerJS service is used only to find each other. Pausing doesn't stop an online match.</p>
         </div>
       </div>
 

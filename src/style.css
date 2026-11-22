@@ -207,3 +207,27 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 .compact #mute-btn { font-size: 18px; padding: 8px 12px; }
 .icon-toggle { margin-left: 6px; background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 10px 12px; }
 .icon-toggle.off { opacity: 0.5; }
+
+/* ---------- online ---------- */
+.primary.alt { background: #3a5bb0; color: #fff; margin-left: 8px; }
+.online-panel { width: 640px; }
+.online-cols { display: flex; gap: 16px; justify-content: center; margin-top: 8px; }
+.online-col { flex: 1; background: #16203d; border: 1px solid #2a3866; border-radius: 10px; padding: 8px 12px 14px; }
+.online-col .primary { margin-top: 6px; }
+#host-code { margin-top: 10px; font-size: 13px; }
+#host-code .code { display: flex; gap: 8px; justify-content: center; align-items: center; margin: 4px 0; }
+#host-code .code b { font-size: 34px; letter-spacing: 6px; color: #ffd84a; font-family: ui-monospace, monospace; }
+#host-code .code button, #online-cancel { background: #1c2747; border: 1px solid #34436e; border-radius: 8px; padding: 6px 14px; }
+#host-code.hidden { display: none; }
+#join-code { width: 150px; font-size: 26px; letter-spacing: 6px; text-align: center; text-transform: uppercase; font-family: ui-monospace, monospace;
+  background: #0b1020; color: #ffd84a; border: 2px solid #34436e; border-radius: 8px; padding: 6px; display: block; margin: 6px auto 0;
+  -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+#online-status { min-height: 20px; margin: 12px 0 8px; font-size: 14px; color: #c9d4ee; }
+#online-status.error { color: #ff8a8a; }
+.fineprint { font-size: 11px; margin-top: 12px; }
+#net { font-size: 13px; color: #8fe3a8; margin-left: 8px; }
+#net.waiting { color: #ffd84a; }
+.online #speed, .online #pm-restart { display: none; }
+.compact #net { font-size: 17px; }
+.compact .online-panel { width: 780px; }
+.compact #online-status { font-size: 17px; }

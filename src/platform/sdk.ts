@@ -7,7 +7,13 @@
 interface CgSdk {
   init(): Promise<void>;
   environment: 'local' | 'crazygames' | 'disabled';
-  game: { gameplayStart(): void; gameplayStop(): void; happytime(): void };
+  game: {
+    gameplayStart(): void;
+    gameplayStop(): void;
+    happytime(): void;
+    settings?: { muteAudio?: boolean };
+    addSettingsChangeListener?(cb: (s: { muteAudio?: boolean }) => void): void;
+  };
   user?: { systemInfo?: { device?: { type?: 'desktop' | 'tablet' | 'mobile' } } };
 }
 
@@ -27,6 +33,12 @@ export const platform = {
   /** 'mobile' | 'tablet' | 'desktop' from the SDK when available (CrazyGames asks games to use this, not touch sniffing). */
   deviceType(): string | null {
     return sdk?.user?.systemInfo?.device?.type ?? null;
+  },
+  /** CrazyGames' muteAudio setting must override in-game audio toggles. Calls cb now and on every change. */
+  watchMute(cb: (muted: boolean) => void) {
+    if (!sdk) return;
+    cb(!!sdk.game.settings?.muteAudio);
+    sdk.game.addSettingsChangeListener?.((s) => cb(!!s.muteAudio));
   },
   gameplayStart() {
     sdk?.game.gameplayStart();

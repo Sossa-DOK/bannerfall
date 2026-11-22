@@ -22,6 +22,7 @@
           <div class="core red" id="core1"><span>Red</span><div class="bar"><i></i></div><b></b></div>
           <div id="speed"><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div>
           <button id="legend-btn">📖 Units (L)</button>
+          <button id="mute-btn" title="Mute all sound (M)">🔊</button>
           <button id="pause-btn">❚❚ Pause</button>
         </div>
       </div>
@@ -71,9 +72,11 @@
           <button id="start" class="primary">Start match</button>
           <button id="menu-legend">📖 Units &amp; counters</button>
           <button id="tutorial-btn">🎓 Tutorial</button>
+          <button id="menu-sound" class="icon-toggle"></button>
+          <button id="menu-music" class="icon-toggle"></button>
           <p class="help muted">
             Build barracks on your grid: they spawn units that march down the bridge on their own. Towers defend your side.
-            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>G</b> gale · <b>Q W E</b> cards · <b>L</b> unit legend · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
+            Destroy the enemy Heartstone to win. Hotkeys: <b>1–8</b> pick building · <b>U</b> upgrade · <b>O</b> overclock · <b>G</b> gale · <b>Q W E</b> cards · <b>L</b> unit legend · <b>M</b> mute · <b>Esc</b> cancel / pause menu · <b>Space</b> or <b>P</b> pause.
           </p>
         </div>
       </div>
@@ -86,6 +89,10 @@
             <button id="pm-legend">📖 Units &amp; counters</button>
             <button id="pm-restart">↻ Restart match</button>
             <button id="pm-exit">⏏ Exit to main menu</button>
+          </div>
+          <div class="pm-row">
+            <button id="pm-sound"></button>
+            <button id="pm-music"></button>
           </div>
           <p class="muted help">Space, P or Esc to resume</p>
         </div>

@@ -55,6 +55,10 @@ On a first visit the game drops you straight into a short guided tutorial. You c
 
 The top bar also has 1× / 2× / 4× game speed.
 
+### Sound
+
+All sound effects and music are **synthesized in code** with the Web Audio API, so there are no audio files to download. Each faction has its own music loop, plus a calm menu theme. Toggle sound effects and music from the main menu or the pause menu; **M** or the 🔊 button mutes everything. Settings are remembered. When the CrazyGames SDK is loaded, its mute setting overrides these toggles.
+
 ### Touch (phones and tablets)
 
 Play in landscape; in portrait the game pauses and asks you to rotate.
@@ -88,7 +92,8 @@ src/
   game/       Match: wires the world and its bots together
   render/     canvas renderer and unit silhouettes
   ui/         HUD, unit legend, scout hint, tutorial
-  platform/   CrazyGames SDK v3 wrapper
+  audio/      procedural sound effects and music (Web Audio)
+  platform/   CrazyGames SDK v3 wrapper (incl. muteAudio)
   main.ts     menus, input, game loop
 scripts/      headless balance and debugging scripts
 ```
@@ -102,5 +107,4 @@ The simulation is kept separate from rendering and is **deterministic**: the sam
 - Not done yet:
   - ads
   - saving through the CrazyGames Data Module (the "tutorial done" flag is in `localStorage` for now)
-  - the SDK's mute setting
-  - real art and audio
+  - real art (audio is procedural for now)

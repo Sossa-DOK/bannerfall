@@ -202,3 +202,8 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 .compact .choices .fac b { font-size: 19px; }
 .compact .cardpick button .any { display: none; }
 .compact .panel h1 { margin-bottom: 0; }
+
+#mute-btn { background: #1c2747; border: 1px solid #34436e; border-radius: 6px; padding: 3px 8px; font-size: 13px; }
+.compact #mute-btn { font-size: 18px; padding: 8px 12px; }
+.icon-toggle { margin-left: 6px; background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 10px 12px; }
+.icon-toggle.off { opacity: 0.5; }

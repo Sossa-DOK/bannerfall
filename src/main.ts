@@ -1,13 +1,14 @@
 import './style.css';
 import type { Difficulty } from './ai/bot';
 import type { BuildingDef, FactionId } from './data/types';
-import { CARDS_PER_PLAYER, cardOptions, defaultCards, getCard } from './data/cards';
+import { CARD_UNLOCK, CARDS_PER_PLAYER, cardOptions, defaultCards, getCard } from './data/cards';
 import { FACTIONS } from './data/factions';
 import { Match, otherFaction, type MatchSetup, type Mode } from './game/match';
+import { audio } from './audio/audio';
 import { platform } from './platform/sdk';
 import { Renderer } from './render/renderer';
 import * as L from './sim/layout';
-import { TICK, type Building } from './sim/world';
+import { TICK, TIER_TIMES, type Building } from './sim/world';
 import { Hud } from './ui/hud';
 import { Legend, scoutHint } from './ui/legend';
 import { Tutorial, highlightTiles, tutorialDone } from './ui/tutorial';
@@ -189,6 +190,9 @@ function startMatch(asTutorial = false) {
   if (asTutorial) tutorial = new Tutorial(match, stage, () => (tutorial = null));
   else toast(`You are ${FACTIONS[choice.faction].name}. Press 1 and click a tile on your grid. Press L for the unit legend.`);
   $('#scout').innerHTML = '';
+  audio.setMusic(choice.faction);
+  audio.setDucked(false);
+  audio.play('start');
   platform.gameplayStart();
 }
 
@@ -196,6 +200,8 @@ function endMatch() {
   if (!match) return;
   const w = match.world;
   const won = w.winner === w.players[match.humanId].team;
+  audio.play(won ? 'victory' : 'defeat');
+  audio.setDucked(true);
   platform.gameplayStop();
   if (won) platform.happytime();
   $('#end-title').textContent = won ? 'Victory!' : 'Defeat';
@@ -207,6 +213,7 @@ function endMatch() {
 function setPaused(p: boolean) {
   if (!match || match.world.winner !== null) return;
   paused = p;
+  audio.setDucked(paused);
   if (paused) platform.gameplayStop();
   else platform.gameplayStart();
 }
@@ -228,6 +235,7 @@ function useCard(i: number) {
   const ok = w.canCast(match.humanId, i);
   if (!ok.ok) {
     toast(ok.reason!);
+    audio.play('error');
     return;
   }
   const card = getCard(slot.id);
@@ -275,6 +283,8 @@ $('#pm-restart').addEventListener('click', () => startMatch(currentIsTutorial));
 $('#pm-exit').addEventListener('click', () => exitToMenu());
 
 function exitToMenu() {
+  audio.setMusic('menu');
+  audio.setDucked(false);
   tutorial?.finish();
   tutorial = null;
   if (match) platform.gameplayStop();
@@ -352,6 +362,7 @@ canvas.addEventListener('pointerdown', (e) => {
     } else {
       const c = getCard(w.players[match.humanId].cards[aiming].id);
       toast(c.target === 'ownBuilding' ? 'Click one of your buildings below rank 3' : 'Aim on your own half of the bridge');
+      audio.play('error');
     }
     return;
   }
@@ -365,11 +376,15 @@ canvas.addEventListener('pointerdown', (e) => {
     if (res.ok) {
       pendingTile = null;
       w.place(match.humanId, buildDef.id, t.col, t.row);
+      audio.play('build', p.x);
       if (!e.shiftKey) buildDef = null; // shift-click to place several
     } else if (res.reason === 'Tile taken') {
       buildDef = null;
       selected = w.buildingAt(match.humanId, t.col, t.row) ?? null;
-    } else toast(res.reason!);
+    } else {
+      toast(res.reason!);
+      audio.play('error');
+    }
     return;
   }
   // select any building under the cursor (yours or not, for info)
@@ -423,10 +438,12 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'u' || e.key === 'U') doUpgrade();
   else if (e.key === 'o' || e.key === 'O') doOverclock();
   else if (e.key === 'g' || e.key === 'G') doAbility();
+  else if (e.key === 'm' || e.key === 'M') toggleAudio('muted');
 });
 
 // Don't fast-forward after the tab was hidden. (No gameplayStop on focus loss, per CrazyGames rules.)
 document.addEventListener('visibilitychange', () => {
+  audio.setHidden(document.hidden);
   lastFrame = performance.now();
 });
 
@@ -473,8 +490,17 @@ function frame(nowMs: number) {
       acc += dt * speed;
       let steps = 0;
       while (acc >= TICK && steps < 40) {
+        const before = w.time;
+        const coreBefore = w.cores[w.players[match.humanId].team].hp;
         match.step();
         renderer.ingest(w.events, match.humanId, now);
+        for (const ev of w.events) audio.event(ev, match.humanId);
+        if (w.cores[w.players[match.humanId].team].hp < coreBefore - 1) audio.play('alarm');
+        for (const [at, msg] of TIMED_ANNOUNCEMENTS)
+          if (before < at && w.time >= at) {
+            audio.play('tier');
+            toast(msg);
+          }
         for (const ev of w.events)
           if (ev.type === 'card' && ev.owner !== match.humanId) {
             const c = getCard(ev.card);
@@ -522,7 +548,56 @@ function frame(nowMs: number) {
 const newIdle = () => new Match({ mode: '2v2', playerFaction: 'union', enemyFaction: 'bloomkin', difficulty: 'normal', seed: (Math.random() * 1e9) >>> 0, human: false });
 let idleWorld = newIdle();
 
+// ---------- audio ----------
+const TIMED_ANNOUNCEMENTS: [number, string][] = [
+  [CARD_UNLOCK, '🃏 Commander Cards are ready (Q / W / E)'],
+  [TIER_TIMES[2], '⬆ Tier 2 buildings unlocked!'],
+  [TIER_TIMES[3], '⬆⬆ Tier 3 buildings unlocked!'],
+];
+
+// Browsers only allow audio after a user gesture (iOS also needs a fresh one after backgrounding).
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'])
+  window.addEventListener(ev, () => audio.unlock(), { capture: true, passive: true });
+document.addEventListener(
+  'click',
+  (e) => {
+    if ((e.target as HTMLElement).closest('button')) audio.play('click');
+  },
+  true,
+);
+
+function toggleAudio(key: 'sound' | 'music' | 'muted') {
+  audio.unlock();
+  audio.toggle(key);
+  syncAudioButtons();
+}
+
+function syncAudioButtons() {
+  const a = audio.state;
+  const forced = audio.effectivelyMuted && !a.muted; // muted by CrazyGames
+  $('#mute-btn').textContent = audio.effectivelyMuted ? '🔇' : '🔊';
+  $('#mute-btn').title = forced ? 'Muted by CrazyGames settings' : 'Mute all sound (M)';
+  $('#pm-sound').textContent = `🔊 Sound effects: ${a.sound ? 'On' : 'Off'}`;
+  $('#pm-music').textContent = `🎵 Music: ${a.music ? 'On' : 'Off'}`;
+  $('#menu-sound').textContent = a.sound ? '🔊' : '🔈';
+  $('#menu-sound').title = `Sound effects: ${a.sound ? 'On' : 'Off'}`;
+  $('#menu-sound').classList.toggle('off', !a.sound);
+  $('#menu-music').textContent = '🎵';
+  $('#menu-music').title = `Music: ${a.music ? 'On' : 'Off'}`;
+  $('#menu-music').classList.toggle('off', !a.music);
+}
+$('#mute-btn').addEventListener('click', () => toggleAudio('muted'));
+$('#pm-sound').addEventListener('click', () => toggleAudio('sound'));
+$('#pm-music').addEventListener('click', () => toggleAudio('music'));
+$('#menu-sound').addEventListener('click', () => toggleAudio('sound'));
+$('#menu-music').addEventListener('click', () => toggleAudio('music'));
+syncAudioButtons();
+
 platform.init().finally(() => {
+  platform.watchMute((m) => {
+    audio.setSdkMuted(m);
+    syncAudioButtons();
+  });
   // First visit: skip the menu and go straight into the guided tutorial (max 1 click to gameplay).
   if (!tutorialDone()) startMatch(true);
   requestAnimationFrame(frame);

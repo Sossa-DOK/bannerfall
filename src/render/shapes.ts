@@ -151,7 +151,14 @@ export function drawUnitShape(c: C, id: string, x: number, y: number, r: number,
       c.arc(x - r * 0.55, y + r * 0.3, r * 0.6, 0, Math.PI * 2);
       c.moveTo(x + r * 0.55 + r * 0.6, y + r * 0.3);
       c.arc(x + r * 0.55, y + r * 0.3, r * 0.6, 0, Math.PI * 2);
-      body(c, fill, stroke, lw);
+      // outline the merged silhouette only: wide stroke first, then fill over the inner overlaps
+      if (lw > 0) {
+        c.strokeStyle = stroke;
+        c.lineWidth = lw * 2;
+        c.stroke();
+      }
+      c.fillStyle = fill;
+      c.fill();
       c.fillStyle = '#e8ff7a';
       c.fillRect(x + dir * r * 0.1 - r * 0.28, y - r * 0.3, r * 0.18, r * 0.18);
       c.fillRect(x + dir * r * 0.1 + r * 0.1, y - r * 0.3, r * 0.18, r * 0.18);

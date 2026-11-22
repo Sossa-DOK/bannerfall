@@ -37,6 +37,32 @@ On a first visit the game drops you straight into a short guided tutorial. You c
 | `npm run preview` | Serve the built `dist/` locally |
 | `npm run typecheck` | Type-check only |
 
+### Publishing a playable build to itch.io
+
+```sh
+npm run package:itch    # builds and writes release/bannerfall-web.zip
+```
+
+On itch.io: **Upload new project** → Kind of project **HTML** → upload the zip and tick **"This file will be played in the browser"** → Embed options: **1280 × 720**, tick **Mobile friendly** (landscape) and **Fullscreen button**. Set Visibility to **Draft** (only you) or **Restricted** (password-protected) for private playtesting.
+
+For repeat uploads you can use itch's [butler](https://itch.io/docs/butler/) command-line tool once it's installed and logged in:
+
+```sh
+ITCH_TARGET=yourname/bannerfall:html5 npm run itch
+```
+
+### Store art
+
+With the dev server running (`npm run dev`) and Firefox installed:
+
+```sh
+npm run cover          # marketing/itch-cover.png (630×500), drawn in marketing/cover.html
+npm run screenshots    # marketing/screenshots/*.png (1280×720)
+npm run gif            # marketing/battle.gif: animated battle clip (needs Python 3 + Pillow)
+```
+
+Screenshots use **screenshot mode**: open `/?shot&f=union&e=bloomkin&mode=1v1&t=200&seed=36&sel=1` to fast-forward a real match (your side played by an autopilot) and freeze it. Options: `f` / `e` factions, `mode`, `t` seconds, `seed`, `sel=1` select a barracks, `gale=1`, `card=<id>`, `legend=1`. Add `gif` (plus `frames`, `every`, `w`, `crop`, `galeAt`, `cardAt`) to record frames for the GIF; see `scripts/gif.py`. The match is deterministic, so the same URL always gives the same frame.
+
 ## Controls
 
 | Key | Action |

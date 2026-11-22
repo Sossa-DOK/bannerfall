@@ -8,7 +8,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx scripts/simulate.ts"
+    "sim": "tsx scripts/simulate.ts",
+    "package:itch": "npm run build && mkdir -p release && rm -f release/bannerfall-web.zip && cd dist && zip -qr ../release/bannerfall-web.zip .",
+    "itch": "npm run build && butler push dist ${ITCH_TARGET:?set ITCH_TARGET, e.g. yourname/bannerfall:html5}",
+    "cover": "mkdir -p /tmp/bannerfall-ff && firefox --headless --no-remote --profile /tmp/bannerfall-ff --window-size=630,500 --screenshot \"$PWD/marketing/itch-cover.png\" http://localhost:5173/marketing/cover.html",
+    "screenshots": "bash scripts/screenshots.sh",
+    "gif": "python3 scripts/gif.py"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

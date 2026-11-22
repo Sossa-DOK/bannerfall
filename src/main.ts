@@ -1,5 +1,5 @@
 import './style.css';
-import type { Difficulty } from './ai/bot';
+import { Bot, type Difficulty } from './ai/bot';
 import type { BuildingDef, FactionId } from './data/types';
 import { CARD_UNLOCK, CARDS_PER_PLAYER, cardOptions, defaultCards, getCard } from './data/cards';
 import { FACTIONS } from './data/factions';
@@ -164,11 +164,11 @@ function toast(msg: string) {
   toastT = 2.2;
 }
 
-function startMatch(asTutorial = false) {
+function startMatch(asTutorial = false, seedOverride?: number) {
   tutorial?.finish();
   tutorial = null;
   legendOpened = false;
-  const seed = (Date.now() ^ (matchCount * 2654435761)) >>> 0;
+  const seed = seedOverride ?? (Date.now() ^ (matchCount * 2654435761)) >>> 0;
   const enemy: FactionId = choice.enemy === 'random' ? otherFaction(choice.faction, seed >>> 5) : (choice.enemy as FactionId);
   const setup: MatchSetup = {
     mode: asTutorial ? '1v1' : choice.mode, playerFaction: choice.faction, enemyFaction: asTutorial ? (choice.faction === 'union' ? 'bloomkin' : 'union') : enemy,
@@ -593,12 +593,138 @@ $('#menu-sound').addEventListener('click', () => toggleAudio('sound'));
 $('#menu-music').addEventListener('click', () => toggleAudio('music'));
 syncAudioButtons();
 
+const SHOT = new URLSearchParams(location.search).has('shot') ? new URLSearchParams(location.search) : null;
+
 platform.init().finally(() => {
   platform.watchMute((m) => {
     audio.setSdkMuted(m);
     syncAudioButtons();
   });
+  if (SHOT) {
+    runScreenshotMode(SHOT);
+    return; // frozen frame: no game loop
+  }
   // First visit: skip the menu and go straight into the guided tutorial (max 1 click to gameplay).
   if (!tutorialDone()) startMatch(true);
   requestAnimationFrame(frame);
 });
+
+// ---------- screenshot mode ----------
+function forceGale(m: Match) {
+  m.world.players[m.humanId].abilityCd = 0;
+  m.world.gale(m.humanId);
+}
+
+/** Play a card from the human's hand on the densest group of enemy units. */
+function castOnCrowd(m: Match, card: string) {
+  const w = m.world;
+  const idx = w.players[m.humanId].cards.findIndex((c) => c.id === card);
+  const foes = w.units.filter((u) => u.team !== w.players[m.humanId].team);
+  let best = foes[0];
+  let bestN = -1;
+  for (const a of foes) {
+    const n = foes.filter((b) => Math.hypot(a.x - b.x, a.y - b.y) < 90).length;
+    if (n > bestN) [best, bestN] = [a, n];
+  }
+  if (idx >= 0 && best) w.cast(m.humanId, idx, best.x, best.y);
+}
+
+/**
+ * GIF recording (screenshot mode + gif): renders `frames` frames, advancing `every`
+ * ticks per frame, and POSTs each one (PNG, battlefield only) to a local collector
+ * (scripts/gif.py) with synchronous XHR so headless Firefox waits for all of them.
+ * Extra params: frames, every, w (output width), crop=x,y,w,h, galeAt / cardAt (frame numbers), collector.
+ */
+function recordGif(q: URLSearchParams, m: Match, pilot: Bot, card: string | null) {
+  const w = m.world;
+  const frames = Number(q.get('frames') ?? 60);
+  const every = Number(q.get('every') ?? 2);
+  const outW = Number(q.get('w') ?? 640);
+  const galeAt = q.has('galeAt') ? Number(q.get('galeAt')) : -1;
+  const cardAt = q.has('cardAt') ? Number(q.get('cardAt')) : -1;
+  const url = q.get('collector') ?? 'http://127.0.0.1:5299/frame';
+  // crop=x,y,w,h in game pixels (default: whole field)
+  const [cx, cy, cw, ch] = (q.get('crop') ?? `0,0,${L.W},${L.H}`).split(',').map(Number);
+  const out = document.createElement('canvas');
+  out.width = outW;
+  out.height = Math.round((outW * ch) / cw);
+  const oc = out.getContext('2d')!;
+  const fps = 20 / every;
+  for (let f = 0; f < frames && w.winner === null; f++) {
+    const now = 1000 + f / fps;
+    if (f === galeAt) forceGale(m);
+    if (f === cardAt && card) castOnCrowd(m, card);
+    for (let k = 0; k < every; k++) {
+      pilot.update(TICK);
+      m.step();
+      renderer.ingest(w.events, m.humanId, now - (every - 1 - k) * TICK);
+    }
+    renderer.draw(w, { humanId: m.humanId, hover: null, buildDef: null, selected: null, highlight: null, aim: null }, now);
+    const k = canvas.width / L.W; // canvas backing pixels per game pixel
+    oc.drawImage(canvas, cx * k, cy * k, cw * k, ch * k, 0, 0, out.width, out.height);
+    // small watermark
+    oc.font = `900 ${Math.round(outW / 28)}px "Arial Black", system-ui, sans-serif`;
+    oc.textAlign = 'right';
+    oc.lineWidth = 4;
+    oc.strokeStyle = '#0b1020';
+    oc.fillStyle = '#ffd27a';
+    oc.strokeText('BANNERFALL', out.width - 10, out.height - 10);
+    oc.fillText('BANNERFALL', out.width - 10, out.height - 10);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${url}?n=${f}`, false); // sync on purpose: keeps the page "loading" until done
+    xhr.send(out.toDataURL('image/png'));
+  }
+  document.title = 'gif frames done';
+}
+/**
+ * Renders one frozen mid-match frame for store-page screenshots, e.g.
+ *   /?shot&f=union&e=bloomkin&mode=1v1&t=210&seed=4&sel=1
+ * Params: f / e factions, mode 1v1|2v2, t seconds to fast-forward, seed,
+ * sel=1 select your best barracks, legend=1 open the unit legend,
+ * gale=1 fire Gale just before the shot, card=<id> play that card on the
+ * densest enemy group just before the shot.
+ * Your side is played by an autopilot bot. Nothing is saved.
+ */
+function runScreenshotMode(q: URLSearchParams) {
+  const f = (q.get('f') ?? 'union') as FactionId;
+  const e = (q.get('e') ?? 'bloomkin') as FactionId;
+  choice.faction = f;
+  choice.enemy = e;
+  choice.mode = (q.get('mode') ?? '1v1') as Mode;
+  choice.difficulty = 'normal';
+  const card = q.get('card');
+  pickedCards = card ? [card, ...defaultCards(f).filter((c) => c !== card)].slice(0, CARDS_PER_PLAYER) : defaultCards(f);
+  startMatch(false, Number(q.get('seed') ?? 1));
+  const m = match!;
+  const w = m.world;
+  $('#toast').style.display = 'none';
+  const pilot = new Bot(w, m.humanId, 'normal');
+  pilot.useCards = false; // keep the card bar showing ready cards
+  const ticks = Math.round(Number(q.get('t') ?? 180) / TICK);
+  const gif = q.has('gif');
+  const nowS = performance.now() / 1000;
+  for (let i = 0; i < ticks && w.winner === null; i++) {
+    const left = ticks - i;
+    if (left === 8 && q.has('gale') && !gif) forceGale(m);
+    if (left === 10 && card && !gif) castOnCrowd(m, card);
+    pilot.update(TICK);
+    m.step();
+    // feed the last ~half second of events to the renderer so shots and bursts are visible
+    if (left <= 12) renderer.ingest(w.events, m.humanId, nowS - left * TICK);
+  }
+  if (gif) {
+    recordGif(q, m, pilot, card);
+    return;
+  }
+  if (q.has('sel')) {
+    selected =
+      w.buildings
+        .filter((b) => b.owner === m.humanId && b.def.kind === 'barracks')
+        .sort((a, b) => b.def.tier - a.def.tier || b.rank - a.rank)[0] ?? null;
+  }
+  $('#scout').innerHTML = scoutHint(w, m.humanId);
+  hud.update(w, m.humanId, null, selected, 1, false, null);
+  renderer.draw(w, { humanId: m.humanId, hover: null, buildDef: null, selected, highlight: null, aim: null }, nowS);
+  if (q.has('legend')) legend.show(f, e);
+  document.title = `shot ready ${Math.floor(w.time)}s`;
+}

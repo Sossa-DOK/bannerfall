@@ -21,6 +21,8 @@ export class Bot {
   private plan: Plan | null = null;
   /** false = bot does nothing (used by the tutorial) */
   enabled = true;
+  /** false = never plays Commander Cards (screenshot autopilot) */
+  useCards = true;
 
   constructor(private w: World, readonly pid: number, readonly difficulty: Difficulty) {
     this.t = THINK[difficulty] * (0.3 + 0.1 * pid);
@@ -50,7 +52,7 @@ export class Bot {
     }
 
     if (fac.mechanic === 'gale' && w.canGale(p.id) && this.threatLevel() >= 6) w.gale(p.id);
-    this.playCards();
+    if (this.useCards) this.playCards();
 
     if (!this.plan) this.plan = this.choose(mine);
     const plan = this.plan;

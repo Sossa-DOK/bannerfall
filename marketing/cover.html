@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bannerfall — itch.io cover (630×500)</title>
+    <style>
+      html, body { margin: 0; background: #0b1020; }
+      canvas { display: block; width: 630px; height: 500px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      itch.io cover image, drawn with the game's own unit silhouettes.
+      Render with:  npm run cover   (needs the dev server running and Firefox installed)
+    -->
+    <canvas id="c" width="1260" height="1000"></canvas>
+    <script type="module">
+      import { drawUnitShape } from '/src/render/shapes.ts';
+
+      const W = 630, H = 500;
+      const cv = document.getElementById('c');
+      const c = cv.getContext('2d');
+      c.scale(2, 2);
+      const BLUE = '#4aa3ff', RED = '#ff5a5a';
+
+      // seeded random so the cover is identical every render
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+      // ---- sky ----
+      const sky = c.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, '#0e1730');
+      sky.addColorStop(0.55, '#24406a');
+      sky.addColorStop(1, '#3a5f8f');
+      c.fillStyle = sky;
+      c.fillRect(0, 0, W, H);
+      for (let i = 0; i < 70; i++) {
+        c.fillStyle = `rgba(255,255,255,${0.25 + rnd() * 0.5})`;
+        c.fillRect(rnd() * W, rnd() * 190, 1.3, 1.3);
+      }
+
+      // distant floating shards
+      const shard = (x, y, w, h, col) => {
+        c.fillStyle = col;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + w, y);
+        c.lineTo(x + w * 0.7, y + h * 0.7);
+        c.lineTo(x + w * 0.45, y + h);
+        c.lineTo(x + w * 0.25, y + h * 0.6);
+        c.closePath();
+        c.fill();
+        c.fillStyle = 'rgba(120,200,140,0.35)';
+        c.fillRect(x, y - 3, w, 4);
+      };
+      shard(40, 175, 90, 60, '#22304d');
+      shard(500, 160, 110, 70, '#22304d');
+      shard(250, 205, 60, 40, '#2a3a5c');
+
+      // clouds
+      const cloud = (x, y, s, a) => {
+        c.fillStyle = `rgba(230,240,255,${a})`;
+        for (const [dx, dy, r] of [[0, 0, 1], [0.9, 0.15, 0.8], [-0.9, 0.2, 0.75], [0.3, -0.35, 0.7]]) {
+          c.beginPath();
+          c.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2);
+          c.fill();
+        }
+      };
+      for (let i = 0; i < 9; i++) cloud(i * 80 - 20 + rnd() * 30, 470 + rnd() * 20, 38 + rnd() * 18, 0.22);
+      for (let i = 0; i < 7; i++) cloud(i * 100 + rnd() * 40, 440 + rnd() * 15, 26 + rnd() * 12, 0.12);
+
+      // ---- Heartstones on their islands ----
+      const island = (x, w, flip) => {
+        c.fillStyle = '#2d2b3d';
+        c.beginPath();
+        c.moveTo(x, 330);
+        c.lineTo(x + w, 330);
+        c.lineTo(x + w * (flip ? 0.25 : 0.75), 430);
+        c.lineTo(x + w * 0.5, 455);
+        c.lineTo(x + w * (flip ? 0.75 : 0.25), 425);
+        c.closePath();
+        c.fill();
+      };
+      island(-30, 130, false);
+      island(530, 130, true);
+      const heart = (x, y, col, cracked) => {
+        const g = c.createRadialGradient(x, y, 4, x, y, 70);
+        g.addColorStop(0, col + 'aa');
+        g.addColorStop(1, col + '00');
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(x, y, 70, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = col;
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 2.5;
+        c.beginPath();
+        c.moveTo(x, y - 42);
+        c.lineTo(x + 24, y);
+        c.lineTo(x, y + 42);
+        c.lineTo(x - 24, y);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        if (cracked) {
+          c.strokeStyle = '#1a1020';
+          c.lineWidth = 2.5;
+          c.beginPath();
+          c.moveTo(x - 4, y - 36);
+          c.lineTo(x + 6, y - 12);
+          c.lineTo(x - 6, y + 4);
+          c.lineTo(x + 8, y + 26);
+          c.moveTo(x + 6, y - 12);
+          c.lineTo(x + 18, y - 6);
+          c.stroke();
+          for (const [dx, dy] of [[30, -30], [38, 8], [22, 40]]) {
+            c.fillStyle = col;
+            c.beginPath();
+            c.moveTo(x + dx, y + dy);
+            c.lineTo(x + dx + 7, y + dy + 4);
+            c.lineTo(x + dx + 2, y + dy + 10);
+            c.closePath();
+            c.fill();
+          }
+        }
+      };
+      heart(38, 290, BLUE, false);
+      heart(592, 290, RED, true);
+
+      // ---- the lightbridge ----
+      const BY = 335;
+      const glow = c.createLinearGradient(0, BY - 40, 0, BY + 40);
+      glow.addColorStop(0, 'rgba(150,215,255,0)');
+      glow.addColorStop(0.5, 'rgba(150,215,255,0.35)');
+      glow.addColorStop(1, 'rgba(150,215,255,0)');
+      c.fillStyle = glow;
+      c.fillRect(0, BY - 40, W, 80);
+      c.fillStyle = 'rgba(170,225,255,0.22)';
+      c.fillRect(0, BY - 22, W, 44);
+      c.strokeStyle = 'rgba(200,240,255,0.9)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(0, BY - 22);
+      c.lineTo(W, BY - 22);
+      c.moveTo(0, BY + 22);
+      c.lineTo(W, BY + 22);
+      c.stroke();
+
+      const unit = (id, x, y, r, team) => {
+        if (['thunderhull', 'thunderbird', 'stinger', 'skimmer', 'dirge', 'storm_roc', 'mender_kite'].includes(id)) {
+          c.fillStyle = 'rgba(0,0,0,0.25)';
+          c.beginPath();
+          c.ellipse(x, BY + 10, r, r * 0.3, 0, 0, Math.PI * 2);
+          c.fill();
+        }
+        drawUnitShape(c, id, x, y, r, team === 0 ? BLUE : RED, Math.max(2, r * 0.12), team === 0 ? 1 : -1);
+      };
+      const shot = (x1, y1, x2, y2, col) => {
+        c.strokeStyle = col;
+        c.lineWidth = 2;
+        c.globalAlpha = 0.85;
+        c.beginPath();
+        c.moveTo(x1, y1);
+        c.lineTo(x2, y2);
+        c.stroke();
+        c.globalAlpha = 1;
+      };
+
+      // back ranks
+      for (const [x, y] of [[150, 322], [125, 344], [175, 350]]) unit('rivetman', x, y, 11, 0);
+      for (const [x, y] of [[100, 326], [92, 352]]) unit('boltcaster', x, y, 9, 0);
+      for (const [x, y] of [[470, 318], [492, 340], [458, 352], [510, 326], [520, 352]]) unit('thornling', x, y, 8, 1);
+      for (const [x, y] of [[545, 330], [540, 352]]) unit('puffcap', x, y, 10, 1);
+
+      // shots across the bridge
+      shot(108, 326, 466, 318, '#f2f2f2');
+      shot(100, 352, 456, 350, '#f2f2f2');
+      shot(545, 328, 180, 350, '#c98bff');
+      shot(200, 205, 430, 300, '#c98bff'); // thunderbird lightning
+      shot(415, 175, 250, 320, '#c98bff'); // dirge wail
+
+      // sky units
+      unit('thunderbird', 190, 200, 26, 0);
+      unit('skimmer', 120, 240, 11, 0);
+      unit('skimmer', 150, 258, 11, 0);
+      unit('dirge', 430, 170, 30, 1);
+      unit('stinger', 500, 230, 9, 1);
+      unit('stinger', 520, 248, 9, 1);
+      unit('stinger', 482, 252, 9, 1);
+
+      // impact burst between the two heroes
+      const bx = 318, by = 310;
+      const burst = c.createRadialGradient(bx, by, 2, bx, by, 60);
+      burst.addColorStop(0, 'rgba(255,240,180,1)');
+      burst.addColorStop(0.35, 'rgba(255,190,80,0.8)');
+      burst.addColorStop(1, 'rgba(255,140,40,0)');
+      c.fillStyle = burst;
+      c.beginPath();
+      c.arc(bx, by, 60, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#fff6d0';
+      c.beginPath();
+      for (let i = 0; i < 16; i++) {
+        const a = (Math.PI * 2 * i) / 16;
+        const rr = i % 2 ? 12 : 34;
+        c.lineTo(bx + Math.cos(a) * rr, by + Math.sin(a) * rr);
+      }
+      c.closePath();
+      c.fill();
+
+      // the clash: Ironclad Walker vs Moss Golem
+      unit('walker', 255, 300, 46, 0);
+      unit('moss_golem', 385, 300, 48, 1);
+
+      // ---- title ----
+      c.textAlign = 'center';
+      c.textBaseline = 'alphabetic';
+      c.font = '900 76px "Arial Black", "Segoe UI", system-ui, sans-serif';
+      c.lineJoin = 'round';
+      c.lineWidth = 12;
+      c.strokeStyle = '#0b1020';
+      c.strokeText('BANNERFALL', W / 2, 92);
+      const tg = c.createLinearGradient(0, 30, 0, 95);
+      tg.addColorStop(0, '#fff3c4');
+      tg.addColorStop(1, '#e0a83a');
+      c.fillStyle = tg;
+      c.fillText('BANNERFALL', W / 2, 92);
+      c.font = '700 21px "Segoe UI", system-ui, sans-serif';
+      c.lineWidth = 6;
+      c.strokeText('Build. Counter. Break their Heartstone.', W / 2, 126);
+      c.fillStyle = '#eaf6ff';
+      c.fillText('Build. Counter. Break their Heartstone.', W / 2, 126);
+      // bottom tagline pill
+      c.font = '800 17px "Segoe UI", system-ui, sans-serif';
+      const tag = '4 FACTIONS  ·  14 COMMANDER CARDS  ·  PLAY IN YOUR BROWSER';
+      const tw = c.measureText(tag).width + 36;
+      c.fillStyle = 'rgba(11,16,32,0.78)';
+      c.beginPath();
+      c.roundRect(W / 2 - tw / 2, 448, tw, 34, 17);
+      c.fill();
+      c.strokeStyle = 'rgba(224,168,58,0.9)';
+      c.lineWidth = 1.5;
+      c.stroke();
+      c.fillStyle = '#ffe9a8';
+      c.fillText(tag, W / 2, 471);
+      document.title = 'ready';
+    </script>
+  </body>
+</html>

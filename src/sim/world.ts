@@ -245,7 +245,8 @@ export class World {
       if (b.ocT > 0) v *= 2;
       inc += v;
     }
-    return Math.round(inc * p.incomeMult * this.comebackMult(p.team));
+    // Not rounded: rounding each tick turned a 0.9x multiplier on 6 base gold into 0.83x.
+    return inc * p.incomeMult * this.comebackMult(p.team);
   }
 
   /** Losing team (core HP 20+ points behind) earns +40% income. */

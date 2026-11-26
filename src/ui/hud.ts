@@ -97,7 +97,7 @@ export class Hud {
     this.last = key;
 
     $('#gold', this.root).textContent = String(Math.floor(p.gold));
-    const inc = w.income(humanId);
+    const inc = Math.round(w.income(humanId));
     $('#income', this.root).textContent = `+${inc} / ${INCOME_INTERVAL}s${w.comebackMult(p.team) > 1 ? ' (comeback +40%)' : ''}`;
     $('#clock', this.root).textContent = fmtTime(w.time);
     const t2 = TIER_TIMES[2] - w.time;

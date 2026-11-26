@@ -9,7 +9,8 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 const THINK: Record<Difficulty, number> = { easy: 2.6, normal: 1.4, hard: 0.7 };
 /** How much randomness drowns out counter-picking (higher = dumber). */
 const NOISE: Record<Difficulty, number> = { easy: 1.2, normal: 0.35, hard: 0.1 };
-export const INCOME_MULT: Record<Difficulty, number> = { easy: 0.85, normal: 1, hard: 1.15 };
+/** AI gold income multiplier. Below 1 on Normal to offset the bot's instant, perfect build orders. */
+export const INCOME_MULT: Record<Difficulty, number> = { easy: 0.75, normal: 0.9, hard: 1.1 };
 
 type Plan = { type: 'build'; def: BuildingDef; since: number } | { type: 'upgrade'; bid: number; since: number };
 

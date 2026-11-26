@@ -60,7 +60,8 @@ export class Match {
       this.bots = [];
       return;
     }
-    const enemyMult = INCOME_MULT[setup.difficulty];
+    // The income handicap only applies against a person; bot-vs-bot balance runs stay even.
+    const enemyMult = setup.human ? INCOME_MULT[setup.difficulty] : 1;
     const players: PlayerConfig[] = [
       { team: 0, slot: 0, faction: setup.playerFaction, isHuman: setup.human, name: setup.human ? 'You' : 'Blue bot' },
     ];

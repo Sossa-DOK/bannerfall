@@ -160,7 +160,8 @@ export class Hud {
     if (sel.def.tower) info.push(`${Math.round(sel.def.tower.dmg * rankMult(sel.rank))} dmg, range ${sel.def.tower.range}`);
     if (sel.def.kind === 'econ') info.push(`Adds income each tick`);
     if (sel.ocT > 0) info.push(`OVERCLOCKED ${Math.ceil(sel.ocT)}s`);
-    $('#sel-info', panel).textContent = info.join('\n');
+    const infoEl = $('#sel-info', panel);
+    infoEl.replaceChildren(...info.map((t) => Object.assign(document.createElement('div'), { textContent: t })));
     ($('#sel-actions', panel) as HTMLElement).style.display = '';
 
     const up = $<HTMLButtonElement>('#sel-upgrade', panel);
@@ -169,7 +170,7 @@ export class Hud {
       up.textContent = 'Max rank';
       up.disabled = true;
     } else {
-      up.textContent = `Upgrade (U) — ${w.upgradeCost(sel)}g`;
+      setLabel(up, 'Upgrade', 'U', `${w.upgradeCost(sel)}g`);
       up.disabled = !w.canUpgrade(humanId, sel);
     }
     const oc = $<HTMLButtonElement>('#sel-overclock', panel);
@@ -177,7 +178,16 @@ export class Hud {
     oc.style.display = canOcKind ? '' : 'none';
     if (canOcKind) {
       oc.disabled = !w.canOverclock(humanId, sel);
-      oc.textContent = sel.ocT > 0 ? `Overclocked (${Math.ceil(sel.ocT)}s)` : sel.ocCd > 0 ? `Overclock in ${Math.ceil(sel.ocCd)}s` : `Overclock (O) — 25% HP, ${OVERCLOCK_TIME}s`;
+      if (sel.ocT > 0) oc.textContent = `Overclocked (${Math.ceil(sel.ocT)}s)`;
+      else if (sel.ocCd > 0) oc.textContent = `Overclock in ${Math.ceil(sel.ocCd)}s`;
+      else setLabel(oc, 'Overclock', 'O', `25% HP, ${OVERCLOCK_TIME}s`);
+      oc.title = `Runs 2× faster for ${OVERCLOCK_TIME}s, costs 25% HP`;
     }
   }
+}
+
+/** "Name (K) — detail": hotkey and detail sit in spans so the compact/touch layout can hide them */
+function setLabel(btn: HTMLElement, name: string, key: string, detail: string) {
+  const html = `${name}<span class="k"> (${key})</span><span class="det"> — ${detail}</span>`;
+  if (btn.innerHTML !== html) btn.innerHTML = html;
 }

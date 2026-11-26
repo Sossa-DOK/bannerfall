@@ -524,13 +524,21 @@ function touchDevice() {
   return lastPointer === 'touch' || window.matchMedia('(pointer: coarse)').matches;
 }
 
+/** widest logical stage: on extra-wide screens (phones in landscape with the browser bar showing)
+ *  the HUD spreads into the side margins instead of everything shrinking to fit the height */
+const MAX_STAGE_W = 1920;
+
 function fit() {
-  // fit the 16:9 stage inside the safe area (phone notches / home indicator)
+  // fit the stage inside the safe area (phone notches / home indicator). The play field is a fixed
+  // 1280x720 canvas; the stage around it grows wider than 16:9 when the screen is wider.
   const r = $('#safe').getBoundingClientRect();
   const w = r.width || window.innerWidth;
   const h = r.height || window.innerHeight;
-  const s = Math.min(w / L.W, h / L.H);
-  stage.style.transform = `translate(${r.left + (w - L.W * s) / 2}px, ${r.top + (h - L.H * s) / 2}px) scale(${s})`;
+  const sw = Math.round(Math.min(MAX_STAGE_W, Math.max(L.W, (w / h) * L.H)));
+  const s = Math.min(w / sw, h / L.H);
+  stage.style.width = `${sw}px`;
+  canvas.style.left = `${(sw - L.W) / 2}px`;
+  stage.style.transform = `translate(${r.left + (w - sw * s) / 2}px, ${r.top + (h - L.H * s) / 2}px) scale(${s})`;
   renderer.resize(s);
   const touch = touchDevice();
   // bigger HUD when the stage is shrunk (phones, small iframes like 821x462) or on touch screens

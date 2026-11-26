@@ -11,8 +11,10 @@ html, body {
   top: env(safe-area-inset-top, 0px); right: env(safe-area-inset-right, 0px); bottom: env(safe-area-inset-bottom, 0px); left: env(safe-area-inset-left, 0px); }
 .panel, .legend-panel { touch-action: pan-y; }
 /* Fixed 1280x720 logical stage, scaled to fit (CrazyGames iframe is 16:9). */
-#stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; }
-#game { position: absolute; inset: 0; width: 1280px; height: 720px; display: block; }
+/* The stage is at least 1280 wide and grows on wider screens (see fit() in main.ts); the play-field canvas stays centered. */
+#stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden;
+  background: linear-gradient(#14203a, #2a4366); }
+#game { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; display: block; }
 button { font: inherit; color: inherit; cursor: pointer; }
 .muted { color: #9fb0d0; }
 .hud { position: absolute; left: 0; right: 0; pointer-events: none; }
@@ -35,7 +37,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #legend-btn { background: #2a3d6e; border: 1px solid #4a64a8; padding: 3px 9px; font-size: 13px; }
 #speed button.active { background: #3a5bb0; }
 
-#bottombar { bottom: 0; height: 104px; display: flex; gap: 10px; padding: 6px 10px 8px; background: linear-gradient(#0b102000, #0b1020f0 30%); }
+#bottombar { bottom: 0; height: 104px; display: flex; justify-content: center; gap: 10px; padding: 6px 10px 8px; background: linear-gradient(#0b102000, #0b1020f0 30%); }
 #build-col { display: flex; flex-direction: column; gap: 4px; }
 #build-buttons { display: flex; gap: 6px; }
 #mechanic { font-size: 12px; }
@@ -53,11 +55,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bbtn .lock { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; }
 .bbtn .lock:empty { display: none; }
 
-#sel-panel { flex: 1; background: #16203dcc; border: 1px solid #34436e; border-radius: 8px; padding: 6px 10px; font-size: 12px; overflow: hidden; }
-#sel-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
-#sel-info { white-space: pre-line; color: #c9d4ee; line-height: 1.3; }
-#sel-actions { margin-top: 4px; display: flex; gap: 6px; }
-#sel-actions button { background: #2c4a8f; border: 1px solid #5a7bd0; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+/* selection panel: name + stats on the left, action buttons stacked on the right so they always
+   fit inside the bottom bar instead of being cut off below it */
+#sel-panel { flex: 1; max-width: 640px; min-width: 0; background: #16203dcc; border: 1px solid #34436e; border-radius: 8px; padding: 6px 8px 6px 10px; font-size: 12px; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); column-gap: 8px; }
+#sel-title { grid-column: 1; font-weight: 700; font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sel-info { grid-column: 1; white-space: pre-line; overflow: hidden; color: #c9d4ee; line-height: 1.3; max-height: 47px; }
+#sel-panel.empty #sel-info { grid-column: 1 / 3; }
+#sel-info > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sel-actions { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+#sel-actions button { background: #2c4a8f; border: 1px solid #5a7bd0; border-radius: 6px; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
+#sel-overclock .det { display: none; }
 #sel-actions button:disabled { opacity: 0.45; cursor: default; }
 
 #toast { top: 64px; text-align: center; font-size: 15px; font-weight: 600; text-shadow: 0 1px 3px #000; transition: opacity 0.3s; }
@@ -139,13 +147,13 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 
 /* ---------- compact layout: phones and small iframes (stage scaled below ~80%) ----------
    The stage is 1280x720 logical px scaled to fit, so these sizes are logical px. */
-.compact #topbar { height: 52px; font-size: 21px; }
+.compact #topbar { height: 56px; font-size: 21px; }
 .compact .gold b { font-size: 28px; }
 .compact #income { font-size: 16px; }
 .compact .core .bar { width: 110px; height: 12px; }
 .compact .core b { display: none; }
 .compact .core { font-size: 17px; }
-.compact #speed button, .compact #pause-btn, .compact #legend-btn { font-size: 18px; padding: 8px 12px; }
+.compact #speed button, .compact #pause-btn, .compact #legend-btn { font-size: 18px; padding: 0 14px; min-height: 46px; }
 .compact #bottombar { height: 124px; }
 .compact .bbtn { width: 102px; height: 96px; gap: 2px; }
 .compact .bbtn .nm { display: none; }
@@ -155,19 +163,20 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 .compact .bbtn .lock { font-size: 22px; }
 .compact #mechanic { display: none; }
 .compact #ability-btn { font-size: 17px; padding: 6px 12px; }
-.compact #sel-panel { font-size: 16px; padding: 6px 10px; }
+.compact #sel-panel { font-size: 16px; padding: 5px 8px 5px 10px; }
 .compact #sel-title { font-size: 19px; }
-.compact #sel-info { line-height: 1.25; max-height: 40px; overflow: hidden; }
-.compact #sel-actions button { font-size: 17px; padding: 8px 12px; }
+.compact #sel-info { line-height: 1.25; max-height: 60px; }
+.compact #sel-actions button { font-size: 17px; padding: 0 12px; min-height: 40px; }
+.touch #sel-actions .k { display: none; }
 .compact #actionbar { top: 538px; }
-.compact #cardbar button { font-size: 16px; min-width: 150px; padding: 4px 8px; }
+.compact #cardbar button { font-size: 16px; min-width: 150px; min-height: 54px; padding: 4px 10px; }
 .compact #cardbar button .ic { font-size: 24px; }
 .compact #cardbar button .st { font-size: 14px; }
 .compact #cardbar button .k { display: none; }
-.compact #cancel-btn { font-size: 19px; padding: 12px 16px; }
-.compact #scout { top: 56px; font-size: 18px; }
-.compact #toast { top: 84px; font-size: 21px; }
-.compact #tutorial { top: 56px; width: 720px; font-size: 19px; }
+.compact #cancel-btn { font-size: 19px; padding: 0 18px; min-height: 54px; }
+.compact #scout { top: 60px; font-size: 18px; }
+.compact #toast { top: 88px; font-size: 21px; }
+.compact #tutorial { top: 60px; width: 720px; font-size: 19px; }
 .compact #tutorial .tut-step { font-size: 14px; }
 .compact #tutorial button { font-size: 18px; padding: 8px 16px; }
 .compact .panel { max-height: 708px; overflow-y: auto; padding: 12px 22px; }
@@ -204,7 +213,7 @@ table.dmg td.bad { background: #5a1f24; color: #ffb8b8; }
 .compact .panel h1 { margin-bottom: 0; }
 
 #mute-btn { background: #1c2747; border: 1px solid #34436e; border-radius: 6px; padding: 3px 8px; font-size: 13px; }
-.compact #mute-btn { font-size: 18px; padding: 8px 12px; }
+.compact #mute-btn { font-size: 18px; padding: 0 14px; min-height: 46px; }
 .icon-toggle { margin-left: 6px; background: #1c2747; border: 1px solid #34436e; border-radius: 10px; padding: 10px 12px; }
 .icon-toggle.off { opacity: 0.5; }
 
